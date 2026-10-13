@@ -1264,6 +1264,29 @@ html[data-theme='dark'] .ai-mark,
   margin: 0;
   height: 32px;
 }
+.identity-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
+  margin-top: 12px;
+}
+.identity-form label {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+.identity-form input {
+  margin: 0;
+  height: 32px;
+}
+.identity-form .hint,
+.identity-form .row-btns {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.identity-form .row-btns {
+  justify-content: flex-end;
+}
 
 @media (max-width: 640px) {
   .custom-grid { grid-template-columns: 1fr; }

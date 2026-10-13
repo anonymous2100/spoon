@@ -338,9 +338,9 @@ export async function cloneRepo(
 }
 
 function guessCloneName(url: string): string {
-  const clean = url.replace(/\.git$/, '').replace(/\/$/, '')
-  const part = clean.split('/').pop() || clean.split(':').pop() || 'repo'
-  return part
+  // URLs, scp-style remotes (git@host:org/repo.git) and local Windows paths (C:\src\repo.git).
+  const clean = url.trim().replace(/[\\/]+$/, '').replace(/\.git$/i, '')
+  return clean.split(/[\\/:]/).filter(Boolean).pop() || 'repo'
 }
 
 const gitDirs = new Map<string, string>()
@@ -534,8 +534,9 @@ function parseOrdinary(line: string): StatusEntry {
 }
 
 function parseUnmerged(line: string): StatusEntry {
+  // u <XY> <sub> <m1> <m2> <m3> <mW> <h1> <h2> <h3> <path>: the path is the 10th field.
   const rest = line.slice(2)
-  const path = rest.split(' ').slice(10).join(' ')
+  const path = rest.split(' ').slice(9).join(' ')
   return {
     path,
     index: 'U',
@@ -778,13 +779,21 @@ export async function fetchRemote(cwd: string, opts: FetchOptions = {}): Promise
 }
 
 export async function pullRemote(cwd: string, opts: PullOptions = {}): Promise<GitResult> {
-  if (opts.stash) await git(cwd, ['stash', 'push', '-u', '-m', 'spoon: auto-stash before pull'], { allowFail: true })
+  // Only pop what this pull stashed: a clean tree creates no stash, and popping then would
+  // restore an unrelated older one.
+  const stashTop = async () => (await git(cwd, ['rev-parse', '-q', '--verify', 'refs/stash'], { allowFail: true })).stdout.trim()
+  let stashed = false
+  if (opts.stash) {
+    const before = await stashTop()
+    await git(cwd, ['stash', 'push', '-u', '-m', 'spoon: auto-stash before pull'], { allowFail: true })
+    stashed = (await stashTop()) !== before
+  }
   const args = ['pull']
   if (opts.rebase) args.push('--rebase')
   if (opts.prune) args.push('--prune')
   if (opts.remote) args.push(opts.remote)
   const r = await git(cwd, args)
-  if (opts.stash) await git(cwd, ['stash', 'pop'], { allowFail: true })
+  if (stashed) await git(cwd, ['stash', 'pop'], { allowFail: true })
   return r
 }
 
@@ -803,6 +812,16 @@ export async function checkout(cwd: string, ref: string, create = false): Promis
   if (create) args.push('-b')
   args.push(ref)
   await git(cwd, args)
+}
+
+/** Check out a remote branch (`origin/feature`): reuse the local branch, or create one that tracks it. */
+export async function checkoutRemote(cwd: string, remoteRef: string): Promise<void> {
+  const remotes = (await getRemotes(cwd)).map((r) => r.name).sort((a, b) => b.length - a.length)
+  const remote = remotes.find((name) => remoteRef.startsWith(`${name}/`))
+  const local = remote ? remoteRef.slice(remote.length + 1) : remoteRef.replace(/^[^/]+\//, '')
+  const exists = await git(cwd, ['show-ref', '--verify', '--quiet', `refs/heads/${local}`], { allowFail: true })
+  if (exists.code === 0) await git(cwd, ['checkout', local])
+  else await git(cwd, ['checkout', '-b', local, '--track', remoteRef])
 }
 
 export async function createBranch(cwd: string, name: string, checkoutBranch = true, startPoint?: string): Promise<void> {
@@ -1262,7 +1281,8 @@ export async function reflog(cwd: string): Promise<CommitInfo[]> {
 }
 
 export async function readConflict(cwd: string, file: string): Promise<ConflictFile> {
-  const working = existsSync(join(cwd, file)) ? readFileSync(join(cwd, file), 'utf8') : ''
+  const abs = worktreeFile(cwd, file)
+  const working = existsSync(abs) && statSync(abs).isFile() ? readFileSync(abs, 'utf8') : ''
   const show = async (stage: string) => {
     const r = await git(cwd, ['show', `:${stage}:${file}`], { allowFail: true })
     return r.code === 0 ? r.stdout : ''
@@ -1272,7 +1292,7 @@ export async function readConflict(cwd: string, file: string): Promise<ConflictF
 }
 
 export async function writeResolved(cwd: string, file: string, content: string): Promise<void> {
-  const full = join(cwd, file)
+  const full = worktreeFile(cwd, file)
   mkdirSync(dirname(full), { recursive: true })
   writeFileSync(full, content, 'utf8')
   await git(cwd, ['add', '--', file])

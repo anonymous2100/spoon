@@ -8,7 +8,7 @@ import {
   nativeTheme,
   clipboard
 } from 'electron'
-import { existsSync, mkdirSync, watch as fsWatch, writeFileSync, type FSWatcher } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, watch as fsWatch, writeFileSync, type FSWatcher } from 'node:fs'
 import { release } from 'node:os'
 import { basename, join, resolve, dirname } from 'node:path'
 import type {
@@ -740,6 +740,9 @@ function registerIpc(): void {
   ipcMain.handle('git:checkout', (_e, path: string, ref: string, create?: boolean) =>
     withActivity('Checkout', `git checkout ${ref}`, () => git.checkout(path, ref, !!create))
   )
+  ipcMain.handle('git:checkoutRemote', (_e, path: string, remoteRef: string) =>
+    withActivity('Checkout', `git checkout --track ${remoteRef}`, () => git.checkoutRemote(path, remoteRef))
+  )
   ipcMain.handle('git:createBranch', (_e, path: string, name: string, checkout: boolean, start?: string) =>
     git.createBranch(path, name, checkout, start)
   )
@@ -926,27 +929,40 @@ async function snapshot(path: string) {
 }
 
 async function interactiveRebase(cwd: string, onto: string, todos: RebaseTodoItem[]): Promise<void> {
-  const dir = join(app.getPath('temp'), 'spoon-rebase')
-  mkdirSync(dir, { recursive: true })
+  const dir = mkdtempSync(join(app.getPath('temp'), 'spoon-rebase-'))
   const editor = join(dir, 'editor.js')
-  const todoText = todos
+  const todoFile = join(dir, 'todo.txt')
+  // The dialog lists commits newest first, like History; git expects the todo oldest first.
+  const todoText = [...todos]
+    .reverse()
     .filter((t) => t.action !== 'drop')
     .map((t) => `${t.action} ${t.hash} ${t.subject}`)
     .join('\n')
-  writeFileSync(join(dir, 'todo.txt'), todoText, 'utf8')
+  writeFileSync(todoFile, todoText + '\n', 'utf8')
   writeFileSync(
     editor,
-    `const fs=require('fs');const p=process.argv[process.argv.length-1];const t=fs.readFileSync(${JSON.stringify(join(dir, 'todo.txt'))},'utf8');fs.writeFileSync(p,t);`,
+    `const fs=require('fs');const p=process.argv[process.argv.length-1];fs.writeFileSync(p,fs.readFileSync(${JSON.stringify(todoFile)},'utf8'));`,
     'utf8'
   )
-  await withActivity('Interactive rebase', `git rebase -i ${onto}`, () =>
-    git.git(cwd, ['rebase', '-i', onto], {
-      env: {
-        GIT_SEQUENCE_EDITOR: `node "${editor.replace(/\\/g, '/')}"`,
-        GIT_EDITOR: 'true'
-      }
-    })
-  )
+  // When the list reaches the root commit there is no parent to rebase onto.
+  const validOnto =
+    onto !== '--root' && (await git.git(cwd, ['rev-parse', '--verify', '--quiet', `${onto}^{commit}`], { allowFail: true })).code === 0
+  const args = ['rebase', '-i', ...(validOnto ? [onto] : ['--root'])]
+  // Run the sequence editor with Spoon's own runtime: end users do not have Node.js installed.
+  const runtime = process.execPath.replace(/\\/g, '/')
+  try {
+    await withActivity('Interactive rebase', `git ${args.join(' ')}`, () =>
+      git.git(cwd, args, {
+        env: {
+          ELECTRON_RUN_AS_NODE: '1',
+          GIT_SEQUENCE_EDITOR: `"${runtime}" "${editor.replace(/\\/g, '/')}"`,
+          GIT_EDITOR: 'true'
+        }
+      })
+    )
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 }
 
 process.on('uncaughtException', (err) => {

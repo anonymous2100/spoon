@@ -28,6 +28,7 @@ const api = {
     pull: (path: string, opts?: object) => ipcRenderer.invoke('git:pull', path, opts),
     push: (path: string, opts?: object) => ipcRenderer.invoke('git:push', path, opts),
     checkout: (path: string, ref: string, create?: boolean) => ipcRenderer.invoke('git:checkout', path, ref, create),
+    checkoutRemote: (path: string, remoteRef: string) => ipcRenderer.invoke('git:checkoutRemote', path, remoteRef),
     createBranch: (path: string, name: string, checkout: boolean, start?: string) =>
       ipcRenderer.invoke('git:createBranch', path, name, checkout, start),
     deleteBranch: (path: string, name: string, force: boolean, remote?: string) =>

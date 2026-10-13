@@ -476,22 +476,6 @@ export function RepoHome({
     }
   }
 
-  async function applyFix(path: string, id: string) {
-    await catchErr(async () => {
-      if (id === 'set-identity') {
-        const name = window.prompt('Git user.name')
-        if (!name?.trim()) return
-        const email = window.prompt('Git user.email')
-        if (!email?.trim()) return
-        await window.spoon.repo.fix(path, id, { name: name.trim(), email: email.trim() })
-      } else {
-        await window.spoon.repo.fix(path, id)
-      }
-      await refreshOverviews([path], true)
-      setHealth((await window.spoon.repo.health(path, false)) as RepoHealth)
-    })
-  }
-
   async function autoFix(path: string, issues: RepoIssue[]) {
     const safe = issues.filter((i) => i.fix && !i.fix.destructive && i.fix.id !== 'set-identity')
     for (const issue of safe) {
@@ -1318,6 +1302,7 @@ export function HealthDialog({
   onOpen?: (path: string) => void
 }) {
   const [health, setHealth] = useState<RepoHealth | null>(null)
+  const [identity, setIdentity] = useState<{ name: string; email: string } | null>(null)
 
   async function load(deep = false) {
     setHealth((await window.spoon.repo.health(path, deep)) as RepoHealth)
@@ -1338,16 +1323,13 @@ export function HealthDialog({
           <HealthList
             health={health}
             onFix={async (id) => {
+              // Electron has no window.prompt: ask for the identity in the dialog itself.
+              if (id === 'set-identity') {
+                setIdentity({ name: '', email: '' })
+                return
+              }
               await catchErr(async () => {
-                if (id === 'set-identity') {
-                  const name = window.prompt('Git user.name')
-                  if (!name?.trim()) return
-                  const email = window.prompt('Git user.email')
-                  if (!email?.trim()) return
-                  await window.spoon.repo.fix(path, id, { name: name.trim(), email: email.trim() })
-                } else {
-                  await window.spoon.repo.fix(path, id)
-                }
+                await window.spoon.repo.fix(path, id)
                 await load(false)
               })
             }}
@@ -1362,6 +1344,38 @@ export function HealthDialog({
             }}
             onDeep={() => void load(true)}
           />
+          {identity && (
+            <form
+              className="identity-form"
+              aria-label="Commit identity"
+              onSubmit={(e) => {
+                e.preventDefault()
+                void catchErr(async () => {
+                  await window.spoon.repo.fix(path, 'set-identity', { name: identity.name.trim(), email: identity.email.trim() })
+                  setIdentity(null)
+                  await load(false)
+                })
+              }}
+            >
+              <label>
+                Name
+                <input autoFocus value={identity.name} onChange={(e) => setIdentity({ ...identity, name: e.target.value })} placeholder="Ada Lovelace" />
+              </label>
+              <label>
+                Email
+                <input type="email" value={identity.email} onChange={(e) => setIdentity({ ...identity, email: e.target.value })} placeholder="ada@example.com" />
+              </label>
+              <p className="hint">Saved to your global Git config (user.name and user.email).</p>
+              <div className="row-btns">
+                <Button className="ghost" type="button" onClick={() => setIdentity(null)}>
+                  Cancel
+                </Button>
+                <Button className="primary" type="submit" disabled={!identity.name.trim() || !identity.email.trim()}>
+                  Save identity
+                </Button>
+              </div>
+            </form>
+          )}
           <div className="dialog-foot">
             {onOpen && (
               <Button className="ghost" onClick={() => onOpen(path)}>

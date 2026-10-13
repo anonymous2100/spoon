@@ -107,7 +107,8 @@ async function launch(path: string, spec: LauncherSpec, command?: string): Promi
   }
   if (spec.mode === 'terminal') {
     if (await which('wt')) {
-      spawn('wt', ['-d', path], detached).unref()
+      // `-d .` + cwd: wt would treat a `;` in the folder name as a command separator.
+      spawn('wt', ['-d', '.'], detached).unref()
       return 'Windows Terminal'
     }
     const ps = (await which('pwsh')) ? 'pwsh' : 'powershell'
@@ -116,21 +117,34 @@ async function launch(path: string, spec: LauncherSpec, command?: string): Promi
   }
   if (spec.mode === 'ide') {
     if (!command) throw new Error(`${spec.label} is not installed or not on PATH.`)
-    spawn('cmd', ['/c', command, path], detached).unref()
+    // Never hand the folder to cmd.exe unquoted: "R&D" would open "R" and run "D" as a command.
+    const target = await editorExecutable(command).catch(() => null)
+    if (target) {
+      spawn(target.bin, target.cli ? [target.cli, path] : [path], {
+        ...detached,
+        env: target.cli ? { ...process.env, ELECTRON_RUN_AS_NODE: '1', VSCODE_DEV: '' } : process.env
+      }).unref()
+    } else {
+      spawn('cmd', ['/d', '/s', '/c', `""${command}" "${path}""`], { ...detached, windowsVerbatimArguments: true }).unref()
+    }
     return spec.label
   }
   // CLI / agent: open an interactive terminal session in the repo folder.
   if (!command) throw new Error(`${spec.label} is not installed or not on PATH.`)
   const args = spec.args ?? []
   const line = [command, ...args].map(quoteArg).join(' ')
+  // The folder is passed as the working directory, never inside a command line that a shell
+  // re-parses (`&`, `;` and quotes in folder names stay harmless).
   if (await which('wt')) {
-    spawn('wt', ['-d', path, 'cmd', '/k', line], detached).unref()
+    spawn('wt', ['-d', '.', 'cmd', '/k', line], detached).unref()
     return spec.label
   }
-  spawn('cmd', ['/c', 'start', `"${spec.label}"`, 'cmd', '/k', `cd /d "${path}" && ${line}`], {
+  spawn('cmd', ['/d', '/s', '/c', `"start "${spec.label}" cmd /k ${line}"`], {
     detached: true,
     stdio: 'ignore',
-    windowsHide: true
+    windowsHide: true,
+    cwd: path,
+    windowsVerbatimArguments: true
   }).unref()
   return spec.label
 }

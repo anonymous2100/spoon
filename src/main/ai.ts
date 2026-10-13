@@ -395,11 +395,17 @@ async function claudeComplete(
 }
 
 function cleanMessage(text: string): string {
-  return text
-    .replace(/^```[a-z]*\n?/i, '')
-    .replace(/```$/i, '')
-    .replace(/^["']|["']$/g, '')
+  let out = text
     .trim()
+    .replace(/^```[\w-]*[ \t]*\r?\n?/, '')
+    .replace(/\r?\n?```$/, '')
+    .trim()
+  // Drop quotes only when they wrap the whole message, so "fix: rename 'a' to 'b'" keeps its own.
+  const first = out[0]
+  if (out.length > 1 && (first === '"' || first === "'" || first === '`') && out.endsWith(first)) {
+    out = out.slice(1, -1).trim()
+  }
+  return out
 }
 
 export { providerLabel }

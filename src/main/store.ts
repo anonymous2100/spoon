@@ -1,5 +1,5 @@
 import { app, nativeTheme, safeStorage } from 'electron'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { DEFAULT_AI_MODELS, fallbackAiProvider } from '../shared/models'
 import { launcherFromEditor } from '../shared/launchers'
@@ -135,6 +135,15 @@ function load(): StoreFile {
       }
     }
   } catch {
+    // Keep an unreadable file before the next save replaces it, so repos, workspaces and keys can be recovered.
+    const file = filePath()
+    if (existsSync(file)) {
+      try {
+        copyFileSync(file, join(app.getPath('userData'), `spoon.corrupt-${Date.now()}.json`))
+      } catch {
+        /* best effort */
+      }
+    }
     cache = { settings: { ...defaults }, recent: [], folders: [], workspaces: [], session: emptySession(), creds: {} }
   }
   return cache
@@ -142,7 +151,11 @@ function load(): StoreFile {
 
 function save(data: StoreFile): void {
   cache = data
-  writeFileSync(filePath(), JSON.stringify(data), 'utf8')
+  // Write a temp file and swap it in, so a crash mid-write never leaves a truncated spoon.json.
+  const file = filePath()
+  const temp = `${file}.tmp`
+  writeFileSync(temp, JSON.stringify(data), 'utf8')
+  renameSync(temp, file)
 }
 
 export function getSettings(): Settings {

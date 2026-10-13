@@ -166,7 +166,7 @@ type Overlay =
   | { type: 'init' }
   | { type: 'branch' }
   | { type: 'rename'; from: string }
-  | { type: 'tag' }
+  | { type: 'tag'; hash?: string }
   | { type: 'remote' }
   | { type: 'remote-edit'; name: string; url: string }
   | { type: 'remote-rename'; from: string }
@@ -679,8 +679,9 @@ export function App() {
   }
 
   async function toggleTheme() {
-    if (!settings) return
-    const next = theme === 'light' ? 'dark' : 'light'
+    // Read the saved theme: the menu listener keeps the closure from when it subscribed.
+    const current = (await window.spoon.app.settings()) as Settings
+    const next = current.theme === 'light' ? 'dark' : 'light'
     const s = await window.spoon.app.patchSettings({ theme: next })
     await commitSettings(s)
   }
@@ -2207,7 +2208,7 @@ function Workspace({
         role="button" tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); clickLocalBranch(b) } }}
         onClick={() => clickLocalBranch(b)}
-        onDoubleClick={() => void window.spoon.git.checkout(path, b.name).then(onReload)}
+        onDoubleClick={() => void catchErr(async () => { await window.spoon.git.checkout(path, b.name); onReload() })}
         onContextMenu={(e) => {
           e.preventDefault()
           branchCtx(b)
@@ -2238,7 +2239,7 @@ function Workspace({
         role="button" tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); clickRemoteBranch(b) } }}
         onClick={() => clickRemoteBranch(b)}
-        onDoubleClick={() => void window.spoon.git.checkout(path, short, true).then(onReload)}
+        onDoubleClick={() => void catchErr(async () => { await window.spoon.git.checkoutRemote(path, b.name); onReload() })}
         onContextMenu={(e) => {
           e.preventDefault()
           remoteCtx(remote)
@@ -2639,7 +2640,15 @@ function Workspace({
                 diffs={file ? diffs.filter((d) => d.path === file || d.origPath === file) : diffs}
                 split={split}
                 staged={stagedFocus}
-                onHunk={(h, mode) => file && void window.spoon.git.applyHunk(path, file, h, mode).then(onReload)}
+                onHunk={(h, mode) =>
+                  file &&
+                  void catchErr(async () => {
+                    // Discarding a hunk cannot be undone; ask like file discard does.
+                    if (mode === 'discard' && !(await window.spoon.app.confirm(`Discard this change in ${file}?`, 'This cannot be undone.'))) return
+                    await window.spoon.git.applyHunk(path, file, h, mode)
+                    onReload()
+                  })
+                }
               />
               {analysis && (
                 <div className="analysis">
@@ -2864,7 +2873,7 @@ function Workspace({
                         if (ok) await window.spoon.git.reset(path, s.slice(3), 'hard')
                       }
                       if (s.startsWith('cp:')) await window.spoon.app.copy(s.slice(3))
-                      if (s.startsWith('tg:')) onOverlay({ type: 'tag' })
+                      if (s.startsWith('tg:')) onOverlay({ type: 'tag', hash: s.slice(3) })
                       onReload()
                     })
                   }
@@ -3575,7 +3584,7 @@ function DialogHost({
         }}
       />
     )
-  if (overlay.type === 'tag' && path) return <FieldDialog title="Create Tag" label="Name" onClose={onClose} onOk={async (name) => { await window.spoon.git.createTag(path, name, name, snap?.commits[0]?.hash); onReload(); onClose() }} />
+  if (overlay.type === 'tag' && path) return <FieldDialog title="Create Tag" label="Name" onClose={onClose} onOk={async (name) => { await window.spoon.git.createTag(path, name, name, overlay.hash); onReload(); onClose() }} />
   if (overlay.type === 'stash' && path)
     return <StashDialog path={path} files={overlay.files} settings={settings} accounts={accounts} onClose={onClose} onReload={onReload} onAiSettings={onAiSettings} />
   if (overlay.type === 'remote' && path)
@@ -3802,15 +3811,24 @@ function FieldDialog({
   onOk: (v: string) => Promise<void>
 }) {
   const [v, setV] = useState(initial)
+  const [busy, setBusy] = useState(false)
+  const ready = optional || !!v.trim()
+  // Show Git errors (invalid branch name, tag exists, …) instead of failing silently.
+  const submit = async () => {
+    if (!ready || busy) return
+    setBusy(true)
+    await catchErr(() => onOk(v.trim()))
+    setBusy(false)
+  }
   return (
     <Modal title={title} onClose={onClose}>
       <label>{label}</label>
-      <input autoFocus value={v} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void onOk(v)} />
+      <input autoFocus value={v} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void submit()} />
       <div className="dialog-foot">
         <Button className="ghost" onClick={onClose}>
           Cancel
         </Button>
-        <Button className="primary" disabled={!optional && !v.trim()} onClick={() => void onOk(v.trim())}>
+        <Button className="primary" disabled={!ready || busy} onClick={() => void submit()}>
           OK
         </Button>
       </div>
@@ -3839,6 +3857,7 @@ function CloneDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (p: str
   const [dir, setDir] = useState('')
   const [name, setName] = useState('')
   const [progress, setProgress] = useState('')
+  const [busy, setBusy] = useState(false)
   useEffect(() => window.spoon.app.on('clone:progress', (l) => setProgress((p) => p + String(l))), [])
   return (
     <Modal title="Clone" onClose={onClose}>
@@ -3860,14 +3879,18 @@ function CloneDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (p: str
         </Button>
         <Button
           className="primary"
-          disabled={!url || !dir}
-          onClick={async () => {
-            const dest = (await window.spoon.git.clone({ url, directory: dir, name: name || undefined, recursive: true })) as string
-            onOpen(dest)
-            onClose()
+          disabled={!url.trim() || !dir.trim() || busy}
+          onClick={() => {
+            setBusy(true)
+            setProgress('')
+            void catchErr(async () => {
+              const dest = (await window.spoon.git.clone({ url: url.trim(), directory: dir.trim(), name: name.trim() || undefined, recursive: true })) as string
+              onOpen(dest)
+              onClose()
+            }).finally(() => setBusy(false))
           }}
         >
-          Clone
+          {busy ? 'Cloning...' : 'Clone'}
         </Button>
       </div>
     </Modal>
@@ -3891,12 +3914,14 @@ function InitDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (p: stri
         </Button>
         <Button
           className="primary"
-          disabled={!dir}
-          onClick={async () => {
-            const dest = (await window.spoon.git.init(dir, true)) as string
-            onOpen(dest)
-            onClose()
-          }}
+          disabled={!dir.trim()}
+          onClick={() =>
+            void catchErr(async () => {
+              const dest = (await window.spoon.git.init(dir.trim(), true)) as string
+              onOpen(dest)
+              onClose()
+            })
+          }
         >
           Create
         </Button>
@@ -4070,11 +4095,13 @@ function ConflictDialog({
         </Button>
         <Button
           className="primary"
-          onClick={async () => {
-            await window.spoon.git.writeResolved(path, file, text)
-            onReload()
-            onClose()
-          }}
+          onClick={() =>
+            void catchErr(async () => {
+              await window.spoon.git.writeResolved(path, file, text)
+              onReload()
+              onClose()
+            })
+          }
         >
           Mark resolved
         </Button>
@@ -4094,11 +4121,13 @@ function RebaseDialog({
 }) {
   const [items, setItems] = useState<RebaseTodoItem[]>([])
   const [onto, setOnto] = useState('HEAD')
+  const [busy, setBusy] = useState(false)
   useEffect(() => {
     void window.spoon.git.commits(path, 20, ['HEAD']).then((list) => {
       const head = list as CommitInfo[]
       setItems(head.map((c) => ({ action: 'pick', hash: c.hash, subject: c.subject })))
-      setOnto(head[head.length - 1]?.parents[0] || `HEAD~${Math.max(head.length, 1)}`)
+      // A list that reaches the root commit has no parent to rebase onto.
+      setOnto(head[head.length - 1]?.parents[0] || '--root')
     })
   }, [path])
   return (
@@ -4126,9 +4155,12 @@ function RebaseDialog({
         </Button>
         <Button
           className="primary"
-          disabled={!items.length}
+          disabled={!items.length || busy}
           onClick={async () => {
-            await window.spoon.git.interactiveRebase(path, onto, items)
+            setBusy(true)
+            // A failure (or a stop for conflicts) is shown; the reload then brings up the rebase banner.
+            await catchErr(() => window.spoon.git.interactiveRebase(path, onto, items) as Promise<void>)
+            setBusy(false)
             onReload()
             onClose()
           }}
