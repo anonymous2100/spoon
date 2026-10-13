@@ -15,7 +15,11 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "pack": "npm run icons && npm run build && electron-builder --win nsis",
-    "dist": "npm run pack"
+    "dist": "npm run pack",
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tests/support/register.mjs --test \"tests/unit/**/*.test.ts\" \"src/**/*.test.ts\"",
+    "test:e2e": "npm run build && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test --test-concurrency=1 \"tests/e2e/**/*.test.mjs\"",
+    "test:visual": "npm run build && node scripts/test-file-actions-ui.cjs && node scripts/test-workspace-history-ui.cjs"
   },
   "dependencies": {
     "electron-updater": "^6.8.9",
@@ -30,6 +34,7 @@
     "electron-builder": "^26.0.12",
     "electron-vite": "^4.0.0",
     "lucide-react": "^1.48.0",
+    "playwright": "^1.63.0",
     "png-to-ico": "^3.0.2",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",

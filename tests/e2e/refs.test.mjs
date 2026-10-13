@@ -1,0 +1,280 @@
+// Branch sidebar, remotes, tags, stash, merge/rebase with conflicts, and fetch/pull/push.
+import { after, afterEach, before, test } from 'node:test'
+import assert from 'node:assert/strict'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { commitAll, dialogBox, git, launch, sandbox, subjects, toolbar, view, writeFile } from './harness.mjs'
+
+let box, ui, page, repo, bare, teammate
+const branchRow = (name) => page.locator('.sidebar .branch-row').filter({ hasText: new RegExp(`^\\s*${name}`) }).first()
+const current = () => git(repo, ['rev-parse', '--abbrev-ref', 'HEAD']).trim()
+const branches = () => git(repo, ['branch', '--format=%(refname:short)']).trim().split('\n').sort()
+const section = (title) => page.locator('.sidebar .side-sec').filter({ hasText: title }).first()
+
+async function refresh() {
+  await toolbar(page, 'refresh')
+  await ui.idle()
+}
+
+before(async () => {
+  box = sandbox()
+  ;({ clone: repo, bare, other: teammate } = box.remotePair('refs'))
+  writeFile(repo, 'shared.txt', 'base\n')
+  commitAll(repo, 'add shared')
+  git(repo, ['push', '-q'])
+  git(teammate, ['pull', '-q'])
+  ui = await launch(box, { open: [repo] })
+  page = ui.page
+  await view(page, 'Changes')
+})
+afterEach(async (t) => {
+  await ui?.recover(t)
+  if (t && !t.passed) {
+    const extraRemotes = git(repo, ['remote']).split(/\r?\n/).map((r) => r.trim()).filter((r) => r && r !== 'origin')
+    for (const args of [['merge', '--abort'], ['rebase', '--abort'], ['checkout', '-q', '-f', 'main'], ...extraRemotes.map((r) => ['remote', 'remove', r])]) {
+      try {
+        git(repo, args)
+      } catch {
+        /* nothing in progress */
+      }
+    }
+  }
+})
+after(async () => {
+  await ui?.close()
+  box?.cleanup()
+})
+
+test('New Branch from the toolbar creates and checks out the branch', async () => {
+  await toolbar(page, 'branch')
+  const dialog = dialogBox(page, 'New Branch')
+  await dialog.locator('input').first().fill('feature/login')
+  await dialog.locator('input').first().press('Enter')
+  await ui.until(() => current() === 'feature/login', 'checked out new branch')
+  await page.locator('.branch-chip .br', { hasText: 'feature/login' }).waitFor()
+  await page.locator('.sidebar .side-folder', { hasText: 'feature' }).first().waitFor()
+})
+
+test('double-click a branch to check it out', async () => {
+  await branchRow('main').dblclick()
+  await ui.until(() => current() === 'main', 'back on main')
+  await branchRow('main').locator('.head-badge').waitFor()
+})
+
+test('branch menu: Rename and Delete', async () => {
+  git(repo, ['branch', 'temp'])
+  await refresh()
+  await ui.pickMenu(() => branchRow('temp').click({ button: 'right' }), 'ren:temp')
+  const rename = dialogBox(page, 'Rename temp')
+  await rename.locator('input').first().fill('temp2')
+  await rename.getByRole('button', { name: 'OK', exact: true }).click()
+  await ui.until(() => branches().includes('temp2') && !branches().includes('temp'), 'renamed')
+  await ui.confirmNext(true)
+  await ui.pickMenu(() => branchRow('temp2').click({ button: 'right' }), 'del:temp2')
+  await ui.until(() => !branches().includes('temp2'), 'deleted')
+})
+
+test('branch menu: Merge into current (no fast-forward)', async () => {
+  git(repo, ['checkout', '-q', 'feature/login'])
+  writeFile(repo, 'login.ts', 'export const login = 1\n')
+  commitAll(repo, 'feat: login')
+  git(repo, ['checkout', '-q', 'main'])
+  await refresh()
+  await ui.pickMenu(() => page.locator('.sidebar .branch-row').filter({ hasText: 'login' }).first().click({ button: 'right' }), 'merge:feature/login')
+  const dialog = dialogBox(page, 'Merge feature/login')
+  await dialog.getByRole('button', { name: 'Continue', exact: true }).click()
+  await ui.until(() => existsSync(join(repo, 'login.ts')), 'merged')
+  assert.equal(git(repo, ['log', '-1', '--format=%P']).trim().split(' ').length, 2, 'merge commit')
+})
+
+test('branch menu: Rebase current onto another branch', async () => {
+  git(repo, ['checkout', '-q', '-b', 'topic'])
+  writeFile(repo, 'topic.txt', 't\n')
+  commitAll(repo, 'topic work')
+  git(repo, ['checkout', '-q', 'main'])
+  writeFile(repo, 'main-only.txt', 'm\n')
+  commitAll(repo, 'main moved')
+  git(repo, ['checkout', '-q', 'topic'])
+  await refresh()
+  await ui.pickMenu(() => branchRow('main').click({ button: 'right' }), 'rebase:main')
+  await dialogBox(page, 'Rebase onto main').getByRole('button', { name: 'Continue', exact: true }).click()
+  await ui.until(() => subjects(repo).slice(0, 2).join() === 'topic work,main moved', 'rebased')
+  git(repo, ['checkout', '-q', 'main'])
+  await refresh()
+})
+
+test('merge conflict: banner, resolve dialog, mark resolved and continue', async () => {
+  git(repo, ['checkout', '-q', '-b', 'conflict-side'])
+  writeFile(repo, 'shared.txt', 'theirs\n')
+  commitAll(repo, 'their change')
+  git(repo, ['checkout', '-q', 'main'])
+  writeFile(repo, 'shared.txt', 'ours\n')
+  commitAll(repo, 'our change')
+  await refresh()
+  await ui.pickMenu(() => branchRow('conflict-side').click({ button: 'right' }), 'merge:conflict-side')
+  await dialogBox(page, 'Merge conflict-side').getByRole('button', { name: 'Continue', exact: true }).click()
+  const banner = page.locator('.banner')
+  await banner.getByText('Merge in progress').waitFor()
+  await banner.getByText(/1 conflicted file/).waitFor()
+  await banner.getByRole('button', { name: 'Resolve', exact: true }).click()
+  const dialog = page.locator('.dialog').filter({ hasText: 'Merge conflict' })
+  await dialog.getByRole('button', { name: 'Use both', exact: true }).click()
+  await dialog.getByRole('button', { name: 'Mark resolved', exact: true }).click()
+  await ui.until(() => readFileSync(join(repo, 'shared.txt'), 'utf8').includes('ours') && readFileSync(join(repo, 'shared.txt'), 'utf8').includes('theirs'), 'resolved file written')
+  await banner.getByRole('button', { name: 'Continue', exact: true }).click()
+  await ui.until(() => !existsSync(join(repo, '.git', 'MERGE_HEAD')), 'merge concluded')
+  await banner.waitFor({ state: 'detached' })
+})
+
+test('merge conflict: Abort restores the branch', async () => {
+  git(repo, ['checkout', '-q', '-b', 'conflict-two'])
+  writeFile(repo, 'shared.txt', 'two theirs\n')
+  commitAll(repo, 'two theirs')
+  git(repo, ['checkout', '-q', 'main'])
+  writeFile(repo, 'shared.txt', 'two ours\n')
+  const head = commitAll(repo, 'two ours')
+  await refresh()
+  await ui.pickMenu(() => branchRow('conflict-two').click({ button: 'right' }), 'merge:conflict-two')
+  await dialogBox(page, 'Merge conflict-two').getByRole('button', { name: 'Continue', exact: true }).click()
+  await page.locator('.banner').getByText('Merge in progress').waitFor()
+  await page.locator('.banner').getByRole('button', { name: 'Abort', exact: true }).click()
+  await ui.until(() => !existsSync(join(repo, '.git', 'MERGE_HEAD')), 'aborted')
+  assert.equal(git(repo, ['rev-parse', 'HEAD']).trim(), head)
+})
+
+test('stash: save, view, apply, pop and drop', async () => {
+  writeFile(repo, 'README.md', 'stashed edit\n')
+  await refresh()
+  await toolbar(page, 'stash')
+  const dialog = dialogBox(page, 'Stash')
+  await dialog.locator('input').first().fill('wip readme')
+  await dialog.getByRole('button', { name: /^(OK|Stash)$/ }).click()
+  await ui.until(() => git(repo, ['stash', 'list']).includes('wip readme'), 'stash saved')
+  assert.equal(git(repo, ['status', '--porcelain']).trim(), '')
+  await page.locator('.sidebar').getByText('wip readme').first().click()
+  await page.locator('.stash-view').waitFor()
+  await page.locator('.stash-view').getByRole('button', { name: 'Apply', exact: true }).click()
+  await ui.until(() => readFileSync(join(repo, 'README.md'), 'utf8') === 'stashed edit\n', 'applied')
+  assert.ok(git(repo, ['stash', 'list']).includes('wip readme'), 'apply keeps the stash')
+  git(repo, ['checkout', '--', 'README.md'])
+  await refresh()
+  await page.locator('.sidebar').getByText('wip readme').first().click()
+  await page.locator('.stash-view').getByRole('button', { name: 'Pop', exact: true }).click()
+  await ui.until(() => !git(repo, ['stash', 'list']).includes('wip readme'), 'popped')
+  git(repo, ['stash', 'push', '-q', '-m', 'to drop'])
+  await refresh()
+  await page.locator('.sidebar').getByText('to drop').first().click()
+  await ui.confirmNext(true)
+  await page.locator('.stash-view').getByRole('button', { name: 'Drop', exact: true }).click()
+  await ui.until(() => git(repo, ['stash', 'list']).trim() === '', 'dropped')
+})
+
+test('remotes: add, edit URL, rename, fetch and remove', async () => {
+  await section('Remotes').locator('button.sec-add').click()
+  const add = dialogBox(page, 'Add remote')
+  const inputs = add.locator('input')
+  await inputs.nth(0).fill('backup')
+  await inputs.nth(1).fill(bare)
+  await add.getByRole('button', { name: 'Add', exact: true }).click()
+  await ui.until(() => git(repo, ['remote']).includes('backup'), 'remote added')
+  const remoteRow = page.locator('.sidebar .side-sec.sub').filter({ hasText: 'backup' }).first()
+  await remoteRow.waitFor()
+  await ui.pickMenu(() => remoteRow.click({ button: 'right' }), 'fetch')
+  await ui.until(() => git(repo, ['branch', '-r']).includes('backup/main'), 'remote fetched')
+  await ui.pickMenu(() => remoteRow.click({ button: 'right' }), 'edit')
+  const edit = dialogBox(page, 'Edit backup')
+  await edit.locator('input').nth(1).fill('https://example.invalid/backup.git')
+  await edit.getByRole('button', { name: 'Save', exact: true }).click()
+  await ui.until(() => git(repo, ['remote', 'get-url', 'backup']).trim() === 'https://example.invalid/backup.git', 'url edited')
+  await ui.pickMenu(() => remoteRow.click({ button: 'right' }), 'rename')
+  const rename = dialogBox(page, 'Rename remote backup')
+  await rename.locator('input').first().fill('mirror')
+  await rename.getByRole('button', { name: 'OK', exact: true }).click()
+  await ui.until(() => git(repo, ['remote']).includes('mirror'), 'renamed')
+  const mirror = page.locator('.sidebar .side-sec.sub').filter({ hasText: 'mirror' }).first()
+  await ui.confirmNext(true)
+  await ui.pickMenu(() => mirror.click({ button: 'right' }), 'remove')
+  await ui.until(() => !git(repo, ['remote']).includes('mirror'), 'removed')
+})
+
+test('remote branches: double-click checks out the remote branch with tracking', async () => {
+  git(teammate, ['checkout', '-q', '-b', 'shared-feature'])
+  writeFile(teammate, 'sf.txt', 'sf\n')
+  commitAll(teammate, 'shared feature')
+  git(teammate, ['push', '-q', '-u', 'origin', 'shared-feature'])
+  await toolbar(page, 'fetch')
+  await ui.until(() => git(repo, ['branch', '-r']).includes('origin/shared-feature'), 'fetched remote branch')
+  const remoteBranch = page.locator('.sidebar .branch-row.indent').filter({ hasText: 'shared-feature' }).first()
+  await remoteBranch.waitFor()
+  await remoteBranch.dblclick()
+  await ui.until(() => current() === 'shared-feature', 'tracking branch checked out')
+  assert.ok(existsSync(join(repo, 'sf.txt')), 'the work tree has the remote branch content')
+  assert.equal(git(repo, ['rev-parse', '--abbrev-ref', '@{u}']).trim(), 'origin/shared-feature')
+  git(repo, ['checkout', '-q', 'main'])
+  await refresh()
+})
+
+test('tags appear in the sidebar and scope history', async () => {
+  git(repo, ['tag', 'v1.0.0'])
+  await refresh()
+  const tag = section('Tags')
+  if (!(await tag.evaluate((el) => el.classList.contains('open')))) await tag.click()
+  await page.locator('.sidebar').getByText('v1.0.0', { exact: true }).first().click()
+  await page.getByPlaceholder('Commits in v1.0.0').waitFor()
+  await page.getByRole('button', { name: 'Show all', exact: true }).click()
+})
+
+test('branch filter narrows branches and tags', async () => {
+  const filter = page.getByLabel('Filter branches and tags')
+  await filter.fill('login')
+  await page.locator('.sidebar .branch-row').filter({ hasText: 'login' }).first().waitFor()
+  assert.equal(await branchRow('main').count(), 0)
+  await filter.fill('')
+  await branchRow('main').waitFor()
+})
+
+test('toolbar sync: Pull brings teammate commits, Push publishes local commits', async () => {
+  git(repo, ['push', '-q', 'origin', 'main'])
+  git(teammate, ['checkout', '-q', 'main'])
+  git(teammate, ['pull', '-q', 'origin', 'main'])
+  writeFile(teammate, 'from-teammate.txt', 'hi\n')
+  commitAll(teammate, 'teammate commit')
+  git(teammate, ['push', '-q', 'origin', 'main'])
+  await toolbar(page, 'fetch')
+  await page.locator('.toolbar .tb-btn[data-ico="pull"]', { hasText: 'Pull 1' }).waitFor()
+  await toolbar(page, 'pull')
+  await ui.until(() => existsSync(join(repo, 'from-teammate.txt')), 'pulled')
+  writeFile(repo, 'mine.txt', 'mine\n')
+  commitAll(repo, 'my commit')
+  await refresh()
+  await page.locator('.toolbar .tb-btn[data-ico="push"]', { hasText: 'Push 1' }).waitFor()
+  await toolbar(page, 'push')
+  await ui.until(() => git(bare, ['log', '-1', '--format=%s', 'main']).trim() === 'my commit', 'pushed')
+  await page.locator('canvas.confetti').waitFor({ state: 'attached' })
+})
+
+test('Push publishes a new branch with upstream', async () => {
+  git(repo, ['checkout', '-q', '-b', 'brand-new'])
+  writeFile(repo, 'bn.txt', 'bn\n')
+  commitAll(repo, 'brand new')
+  await refresh()
+  await toolbar(page, 'push')
+  await ui.until(() => git(bare, ['branch', '--list', 'brand-new']).includes('brand-new'), 'branch published')
+  // `push -u` writes the upstream config after the remote already has the branch.
+  await ui.until(() => git(repo, ['rev-parse', '--abbrev-ref', '@{u}']).trim() === 'origin/brand-new', 'upstream set')
+  git(repo, ['checkout', '-q', 'main'])
+  await refresh()
+})
+
+test('Push without a remote shows a clear error', async () => {
+  git(repo, ['remote', 'rename', 'origin', 'gone'])
+  git(repo, ['remote', 'remove', 'gone'])
+  await refresh()
+  await toolbar(page, 'push')
+  await ui.expectError(/no remote/i)
+  git(repo, ['remote', 'add', 'origin', bare])
+})
+
+test('no uncaught renderer errors', () => {
+  assert.deepEqual(ui.unexpectedPageErrors(), [])
+})
