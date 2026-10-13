@@ -18,7 +18,7 @@ async function main() {
       git(['init', '-b', 'main']); git(['config', 'user.name', 'Test']); git(['config', 'user.email', 'test@example.com'])
       await fs.writeFile(path.join(repo, 'hello.txt'), 'hello\n'); git(['add', '.']); git(['commit', '-m', 'Initial commit'])
     }
-    await fs.writeFile(path.join(data, 'spoon.json'), JSON.stringify({ settings: { onboarded: true, appearanceVersion: 2, autoUpdate: false, autoFetch: false }, recent: repos.map((repo) => ({ path: repo, name: path.basename(repo), opened: Date.now() })), workspaces: [{ id: 'test-ws', name: 'Test workspace', color: '#a78bfa', repos }], creds: {} }))
+    await fs.writeFile(path.join(data, 'spoon.json'), JSON.stringify({ settings: { onboarded: true, appearanceVersion: 3, autoUpdate: false, autoFetch: false }, recent: repos.map((repo) => ({ path: repo, name: path.basename(repo), opened: Date.now() })), workspaces: [{ id: 'test-ws', name: 'Test workspace', color: '#a78bfa', repos }], creds: {} }))
     const harness = path.join(temp, 'launch.cjs')
     await fs.writeFile(harness, `const {app,BrowserWindow}=require('electron');app.setPath('userData',process.env.SPOON_UI_DATA);BrowserWindow.prototype.show=function(){};BrowserWindow.prototype.focus=function(){};app.on('browser-window-created',(_,w)=>{w.webContents.setBackgroundThrottling(false);w.setSize(1600,1000)});require(${JSON.stringify(path.join(root, 'out/main/index.js'))});`)
     app = await playwright._electron.launch({ executablePath: path.join(root, 'node_modules/electron/dist/electron.exe'), args: [harness], cwd: root, env: { ...process.env, SPOON_UI_DATA: data, ELECTRON_RUN_AS_NODE: undefined } })

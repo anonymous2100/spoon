@@ -259,9 +259,9 @@ export function App() {
   const sessionReadyRef = useRef(false)
 
   const applyAppearance = useCallback((s: Settings) => {
-    const pack = s.themePack || 'spoon'
+    const pack = s.themePack || 'classic'
     const mode = pack === 'spacex' ? 'dark' : s.theme === 'dark' ? 'dark' : 'light'
-    const icons = s.iconStyle || 'mono'
+    const icons = s.iconStyle || 'color'
     const root = document.documentElement
     const changed =
       root.dataset.theme !== mode || root.dataset.pack !== pack || root.dataset.icons !== icons
@@ -914,7 +914,7 @@ export function App() {
     <div
       className={`app ${busy ? 'busy' : ''}`}
       data-theme={theme}
-      data-pack={settings?.themePack ?? 'spoon'}
+      data-pack={settings?.themePack ?? 'classic'}
       data-icons={settings?.iconStyle ?? 'color'}
     >
       <div className="toolbar">
@@ -4411,7 +4411,7 @@ function SettingsDialog({
           <h3>Look</h3>
           <div className="theme-pack-grid">
             {THEME_PACKS.map((pack) => {
-              const on = (settings?.themePack ?? 'spoon') === pack.id
+              const on = (settings?.themePack ?? 'classic') === pack.id
               return (
                 <Button
                   key={pack.id}
