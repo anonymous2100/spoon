@@ -167,3 +167,54 @@ test('ensureAiProvider replaces the retired "free" provider', () => {
   store.patchSettings({ aiProvider: 'free' })
   assert.notEqual(oauth.ensureAiProvider().aiProvider, 'free')
 })
+
+test('AI commit text follows the app language unless a language is pinned', async () => {
+  const systemOf = () => fake.requests.at(-1)!.body.messages?.[0].content ?? ''
+
+  // auto + Chinese UI => Chinese commit messages, with Conventional Commit types kept in English
+  store.patchSettings({ locale: 'zh-CN', aiMessageLanguage: 'auto' })
+  next = () => 'feat: 支持中文提交信息'
+  assert.equal(await generateCommitMessage('custom-fake', '+x'), 'feat: 支持中文提交信息')
+  assert.match(systemOf(), /Simplified Chinese/)
+
+  // an explicit pin wins over the UI language, in both directions
+  store.patchSettings({ aiMessageLanguage: 'en' })
+  next = () => 'feat: english message'
+  assert.equal(await generateCommitMessage('custom-fake', '+x'), 'feat: english message')
+  assert.match(systemOf(), /in English/)
+
+  store.patchSettings({ locale: 'en', aiMessageLanguage: 'zh-CN' })
+  next = () => 'feat: 中文'
+  await generateCommitMessage('custom-fake', '+x')
+  assert.match(systemOf(), /Simplified Chinese/)
+
+  // auto + English UI => English again
+  store.patchSettings({ aiMessageLanguage: 'auto' })
+  await generateCommitMessage('custom-fake', '+x')
+  assert.match(systemOf(), /in English/)
+})
+
+test('commit analysis and review both use the message language', async () => {
+  const repo = makeRepo('analyze-language', {
+    'src/app.ts': 'export const a = 1\n',
+    'src/util.ts': 'export const u = 1\n'
+  })
+  write(repo, 'src/app.ts', 'export const a = 2\n')
+  write(repo, 'src/util.ts', 'export const u = 2\n')
+  store.patchSettings({ locale: 'zh-CN', aiMessageLanguage: 'auto' })
+  next = (req) => {
+    const system = req.body.messages?.[0].content ?? ''
+    const commits = [
+      { subject: 'feat: 更新 a', body: '', files: ['src/app.ts'], rationale: '代码调整' },
+      { subject: 'feat: 更新 util', body: '', files: ['src/util.ts'], rationale: '代码调整' }
+    ]
+    if (/review a proposed sequence/i.test(system)) return JSON.stringify({ summary: '已复查。', commits })
+    return JSON.stringify({ summary: '两处更新。', commits })
+  }
+  const plan = await analyzeRepository('custom-fake', repo)
+  assert.deepEqual(plan.commits.map((commit) => commit.subject), ['feat: 更新 a', 'feat: 更新 util'])
+  const systems = fake.requests.slice(-2).map((request) => request.body.messages?.[0].content ?? '')
+  assert.match(systems[0], /split uncommitted Git changes[\s\S]*Simplified Chinese/)
+  assert.match(systems[1], /review a proposed sequence[\s\S]*Simplified Chinese/)
+  store.patchSettings({ locale: 'en', aiMessageLanguage: 'auto' })
+})

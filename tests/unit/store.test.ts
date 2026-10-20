@@ -25,8 +25,19 @@ test('defaults for a brand-new install', async () => {
   assert.equal(s.onboarded, false)
   assert.equal(s.autoFetch, true)
   assert.equal(s.aiProvider, 'grok')
+  assert.equal(s.aiMessageLanguage, 'auto')
   assert.deepEqual(store.getRecent(), [])
   assert.deepEqual(store.getWorkspaces(), [])
+})
+
+test('AI message language defaults to following the app and rejects unknown values', async () => {
+  const { store } = await freshStore()
+  store.patchSettings({ aiMessageLanguage: 'zh-CN' })
+  assert.equal(store.getSettings().aiMessageLanguage, 'zh-CN')
+  const pinned = await freshStore({ settings: { aiMessageLanguage: 'en' } })
+  assert.equal(pinned.store.getSettings().aiMessageLanguage, 'en')
+  const broken = await freshStore({ settings: { aiMessageLanguage: 'klingon' } })
+  assert.equal(broken.store.getSettings().aiMessageLanguage, 'auto')
 })
 
 test('patchSettings persists to spoon.json', async () => {

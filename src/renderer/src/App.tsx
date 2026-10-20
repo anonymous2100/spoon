@@ -4713,6 +4713,32 @@ function SettingsDialog({
                 />
                 {t('Stage all changes when nothing is staged')}
               </label>
+              <div className="ai-lang-row">
+                <div className="ai-lang-copy">
+                  <strong>{t('Commit message language')}</strong>
+                  <span className="hint">
+                    {t('AI writes commit messages in this language. “Follow app language” uses the language picked in Appearance.')}
+                  </span>
+                </div>
+                <div className="seg ai-lang-seg" role="group" aria-label={t('Commit message language')}>
+                  {(
+                    [
+                      ['auto', t('Follow app language')],
+                      ['zh-CN', '简体中文'],
+                      ['en', 'English']
+                    ] as const
+                  ).map(([id, label]) => (
+                    <Button
+                      variant="segment"
+                      key={id}
+                      className={(settings?.aiMessageLanguage ?? 'auto') === id ? 'on' : ''}
+                      onClick={() => void persist({ aiMessageLanguage: id })}
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
           <div className={`ai-layout ${aiNavCollapsed ? 'collapsed' : ''}`}>

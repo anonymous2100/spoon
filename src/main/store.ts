@@ -4,7 +4,17 @@ import { join } from 'node:path'
 import { DEFAULT_AI_MODELS, fallbackAiProvider } from '../shared/models'
 import { launcherFromEditor } from '../shared/launchers'
 import { isLocaleId } from '../shared/i18n'
-import type { AiProviderId, AppSession, LocaleId, RepoSummary, RepoWorkspace, SessionTab, Settings, ThemeMode } from '../shared/types'
+import type {
+  AiMessageLanguage,
+  AiProviderId,
+  AppSession,
+  LocaleId,
+  RepoSummary,
+  RepoWorkspace,
+  SessionTab,
+  Settings,
+  ThemeMode
+} from '../shared/types'
 import {
   sanitizeAccentCustom,
   sanitizeAccentId,
@@ -43,6 +53,10 @@ function sanitizeLocale(value: unknown): LocaleId {
   return isLocaleId(value) ? value : 'en'
 }
 
+function sanitizeAiMessageLanguage(value: unknown): AiMessageLanguage {
+  return value === 'auto' || isLocaleId(value) ? value : 'auto'
+}
+
 const defaults: Settings = {
   theme: 'dark',
   themePack: 'classic',
@@ -65,6 +79,7 @@ const defaults: Settings = {
   aiEndpoints: [],
   aiCommitMode: 'commit',
   aiStageAll: true,
+  aiMessageLanguage: 'auto',
   recentMessages: [],
   starred: {},
   sidebarWidth: 250,
@@ -116,6 +131,7 @@ function load(): StoreFile {
         accentId: refreshAppearance ? 'blue' : sanitizeAccentId(parsed.settings?.accentId),
         accentCustom: sanitizeAccentCustom((parsed.settings as Partial<Settings> | undefined)?.accentCustom),
         locale: sanitizeLocale((parsed.settings as Partial<Settings> | undefined)?.locale),
+        aiMessageLanguage: sanitizeAiMessageLanguage(parsed.settings?.aiMessageLanguage),
         aiProvider: fallbackAiProvider((parsed.settings as Partial<Settings> | undefined)?.aiProvider),
         aiModels: sanitizeAiModels({ ...defaults.aiModels, ...(parsed.settings?.aiModels ?? {}) }),
         aiEndpoints: parsed.settings?.aiEndpoints ?? [],

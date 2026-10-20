@@ -2051,6 +2051,33 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
   padding-top: 10px;
   border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
 }
+.ai-lang-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+.ai-lang-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.ai-lang-copy strong { font-weight: 600; }
+.ai-lang-copy .hint { margin: 0; }
+.ai-lang-seg {
+  width: auto;
+  flex: 0 0 auto;
+}
+.ai-lang-seg button {
+  white-space: nowrap;
+  padding: 0 10px;
+}
+@media (max-width: 759px) {
+  .ai-lang-row { flex-wrap: wrap; }
+  .ai-lang-seg { flex: 1 1 100%; width: 100%; }
+}
 .ai-layout {
   flex: 1;
   min-height: 0;
@@ -2153,6 +2180,7 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
     grid-template-columns: minmax(0, 1fr) minmax(280px, 1.05fr);
     grid-template-areas:
       "copy seg"
+      "lang lang"
       "check check";
     align-items: center;
     column-gap: 16px;
@@ -2160,6 +2188,7 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
   }
   .ai-commit-copy { grid-area: copy; }
   .ai-commit-seg { grid-area: seg; }
+  .ai-lang-row { grid-area: lang; }
   .ai-stage-check { grid-area: check; }
 }
 

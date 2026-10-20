@@ -75,6 +75,7 @@ API keys and OAuth tokens stay on this machine (`%APPDATA%\spoon\spoon.json`). T
 - Connect Grok, ChatGPT, Claude, or a catalog site; AI actions open Settings if none is connected
 - Add OpenRouter, Groq, Gemini, Ollama, LM Studio, and other OpenAI-compatible APIs from the catalog, or paste a custom base URL
 - Live model list from the selected provider
+- Commit messages follow the app language by default; pin Simplified Chinese or English in Preferences → AI
 
 **Desktop**
 - Light, dark, or match Windows

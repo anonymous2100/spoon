@@ -17,7 +17,9 @@ test('zh-CN pack translates menus, options and settings', () => {
     ['Discard', '丢弃'],
     ['Check for updates', '检查更新'],
     ['Start using Spoon', '开始使用 Spoon'],
-    ['No commits to show', '无可显示的提交']
+    ['No commits to show', '无可显示的提交'],
+    ['Commit message language', '提交信息语言'],
+    ['Follow app language', '跟随应用语言']
   ]
   for (const [en, zh] of samples) {
     assert.equal(t(en), zh, `${en} should translate to ${zh}`)

@@ -3,6 +3,8 @@ export type ThemePack = 'spoon' | 'classic' | 'colored' | 'spacex'
 export type IconStyle = 'mono' | 'color'
 export type AccentId = 'blue' | 'violet' | 'red' | 'teal' | 'amber' | 'silver' | 'custom'
 export type LocaleId = 'en' | 'zh-CN'
+/** Language for AI-written commit text. `auto` follows the app language. */
+export type AiMessageLanguage = 'auto' | LocaleId
 
 export type AiProviderId = string
 
@@ -276,6 +278,8 @@ export interface Settings {
   aiEndpoints: AiEndpointConfig[]
   aiCommitMode: AiCommitMode
   aiStageAll: boolean
+  /** AI commit messages use this language; `auto` keeps them in step with `locale`. */
+  aiMessageLanguage?: AiMessageLanguage
   recentMessages: string[]
   starred: Record<string, string[]>
   sidebarWidth: number

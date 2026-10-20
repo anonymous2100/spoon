@@ -1,5 +1,13 @@
 import { findAiSite, openAiUrl } from '../shared/ai-catalog'
-import type { AiEndpointConfig, AiProviderId, ChangeAnalysis, ChangeBriefFile, RepoSummary, WorkspaceAnalysis } from '../shared/types'
+import type {
+  AiEndpointConfig,
+  AiProviderId,
+  ChangeAnalysis,
+  ChangeBriefFile,
+  LocaleId,
+  RepoSummary,
+  WorkspaceAnalysis
+} from '../shared/types'
 import { fallbackWorkspaceAnalysis, parseWorkspaceAnalysis } from '../shared/workspaces'
 import { fallbackAnalysis, fileDependencies, parseAnalysis, repairCommitOrder } from './analysis'
 import { changeBrief } from './git'
@@ -7,15 +15,47 @@ import { providerLabel, resolveCreds } from './oauth'
 import { getSettings, type StoredAiCreds } from './store'
 import { mt } from './i18n'
 
-const SYSTEM = `You write Git commit messages for a desktop Git client.
+/**
+ * Language for AI-written commit text. `auto` follows the app language, so a Chinese
+ * interface produces Chinese commit messages without any extra configuration.
+ */
+function messageLanguage(): LocaleId {
+  const settings = getSettings()
+  const choice = settings.aiMessageLanguage ?? 'auto'
+  return choice === 'auto' ? settings.locale : choice
+}
+
+/** Shared prompt rule so every AI-written subject, body, summary and rationale uses one language. */
+function languageRule(): string {
+  if (messageLanguage() === 'zh-CN') {
+    return [
+      '- Write every subject, body, summary and rationale in Simplified Chinese (简体中文).',
+      '- Keep the Conventional Commit type token in English, for example "feat: 支持中文提交信息".',
+      '- Keep code identifiers, file paths, branch names and API names exactly as they appear in the diff.'
+    ].join('\n')
+  }
+  return [
+    '- Write every subject, body, summary and rationale in English.',
+    '- Keep code identifiers, file paths, branch names and API names exactly as they appear in the diff.'
+  ].join('\n')
+}
+
+function commitSystem(): string {
+  return `You write Git commit messages for a desktop Git client.
+Language:
+${languageRule()}
 Rules:
 - First line: imperative subject, max 72 characters, no trailing period.
 - Optional body after a blank line, wrapping near 72 chars, explaining why.
 - Prefer Conventional Commits (feat, fix, refactor, docs, test, chore, style, perf) when it fits.
 - Never wrap the message in quotes or markdown fences.
 - Do not mention you are an AI.`
+}
 
-const ANALYZE_SYSTEM = `You split uncommitted Git changes into separate local commits, one per implementation.
+function analyzeSystem(): string {
+  return `You split uncommitted Git changes into separate local commits, one per implementation.
+Language:
+${languageRule()}
 Return JSON only, with no markdown fences:
 {"summary":"short paragraph","commits":[{"subject":"imperative, max 72 chars","body":"why","files":["relative/path"],"rationale":"one sentence"}]}
 Rules:
@@ -26,8 +66,12 @@ Rules:
 - A file that uses a new or changed file, symbol, or API belongs in the same commit or a later one.
 - Do not delete a file before the other changes that stop using it.
 - Do not mention pushing or that you are an AI.`
+}
 
-const REVIEW_SYSTEM = `You review a proposed sequence of local Git commits and fix any sequence that would break an intermediate tree.
+function reviewSystem(): string {
+  return `You review a proposed sequence of local Git commits and fix any sequence that would break an intermediate tree.
+Language:
+${languageRule()}
 Return JSON only, with no markdown fences:
 {"summary":"short paragraph","commits":[{"subject":"imperative, max 72 chars","body":"why","files":["relative/path"],"rationale":"one sentence"}]}
 Rules:
@@ -38,6 +82,7 @@ Rules:
 - Merge commits when splitting them would break the previous commit. Keep them separate when each prefix stays valid.
 - Rewrite subjects and bodies so they match the final groups.
 - Do not mention pushing or that you are an AI.`
+}
 
 const WORKSPACE_SYSTEM = `You organize Git repositories into named workspaces for a desktop Git client.
 Return JSON only, with no markdown fences:
@@ -61,7 +106,7 @@ export async function generateCommitMessage(
   const snippet = diff.length > 24_000 ? diff.slice(0, 24_000) + '\n\n[diff truncated]' : diff
   if (!snippet.trim()) throw new Error(mt('Nothing to commit. Stage changes first.'))
   const user = `Write a commit message for this diff.\n${extra ? `\nContext: ${extra}\n` : ''}\n${snippet}`
-  return complete(provider, user, SYSTEM, undefined, model)
+  return complete(provider, user, commitSystem(), undefined, model)
 }
 
 const STASH_SYSTEM = `You name Git stashes for a desktop Git client.
@@ -104,7 +149,7 @@ export async function analyzeRepository(
     const text = await complete(
       provider,
       `Group these ${kind} changes into one commit per implementation.\n\n${briefListing(scoped)}`,
-      ANALYZE_SYSTEM,
+      analyzeSystem(),
       1600,
       model
     )
@@ -129,7 +174,7 @@ export async function analyzeRepository(
     const text = await complete(
       provider,
       `Review this commit sequence. Reorder or merge commits so none of them breaks the tree left by the previous commit.\n\nProposed:\n${proposed}\n\nDependencies:\n${depText || '(none detected from imports)'}\n\nChanges:\n${briefListing(related, 16_000)}`,
-      REVIEW_SYSTEM,
+      reviewSystem(),
       1800,
       model
     )
@@ -256,7 +301,7 @@ async function compatComplete(
 async function grokComplete(
   creds: StoredAiCreds,
   user: string,
-  system = SYSTEM,
+  system = commitSystem(),
   maxTokens?: number,
   model = 'grok-4.7'
 ): Promise<string> {
@@ -300,7 +345,7 @@ async function grokComplete(
 async function chatgptComplete(
   creds: StoredAiCreds,
   user: string,
-  system = SYSTEM,
+  system = commitSystem(),
   maxTokens?: number,
   model = 'gpt-4o'
 ): Promise<string> {
@@ -348,7 +393,7 @@ async function chatgptComplete(
 async function claudeComplete(
   creds: StoredAiCreds,
   user: string,
-  system = SYSTEM,
+  system = commitSystem(),
   maxTokens = 400,
   model = 'claude-sonnet-4-5'
 ): Promise<string> {
