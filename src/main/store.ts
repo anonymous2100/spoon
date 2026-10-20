@@ -3,7 +3,8 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFil
 import { join } from 'node:path'
 import { DEFAULT_AI_MODELS, fallbackAiProvider } from '../shared/models'
 import { launcherFromEditor } from '../shared/launchers'
-import type { AiProviderId, AppSession, RepoSummary, RepoWorkspace, SessionTab, Settings, ThemeMode } from '../shared/types'
+import { isLocaleId } from '../shared/i18n'
+import type { AiProviderId, AppSession, LocaleId, RepoSummary, RepoWorkspace, SessionTab, Settings, ThemeMode } from '../shared/types'
 import {
   sanitizeAccentCustom,
   sanitizeAccentId,
@@ -38,12 +39,17 @@ function sanitizeTheme(theme: unknown): ThemeMode {
   return nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
 }
 
+function sanitizeLocale(value: unknown): LocaleId {
+  return isLocaleId(value) ? value : 'en'
+}
+
 const defaults: Settings = {
   theme: 'dark',
   themePack: 'classic',
   appearanceVersion: 3,
   iconStyle: 'color',
   accentId: 'blue',
+  locale: 'en',
   fetchIntervalMin: 10,
   autoFetch: true,
   autoFetchAll: false,
@@ -109,6 +115,7 @@ function load(): StoreFile {
         iconStyle: refreshAppearance ? 'color' : sanitizeIconStyle(parsed.settings?.iconStyle),
         accentId: refreshAppearance ? 'blue' : sanitizeAccentId(parsed.settings?.accentId),
         accentCustom: sanitizeAccentCustom((parsed.settings as Partial<Settings> | undefined)?.accentCustom),
+        locale: sanitizeLocale((parsed.settings as Partial<Settings> | undefined)?.locale),
         aiProvider: fallbackAiProvider((parsed.settings as Partial<Settings> | undefined)?.aiProvider),
         aiModels: sanitizeAiModels({ ...defaults.aiModels, ...(parsed.settings?.aiModels ?? {}) }),
         aiEndpoints: parsed.settings?.aiEndpoints ?? [],

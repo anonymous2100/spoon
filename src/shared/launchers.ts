@@ -1,3 +1,5 @@
+import type { TranslateFn } from './i18n'
+
 export type LauncherKind = 'ide' | 'agent' | 'cli' | 'system'
 
 export type LauncherMode = 'ide' | 'cli-term' | 'terminal' | 'explorer'
@@ -132,12 +134,34 @@ export function launcherById(id: string): LauncherSpec | undefined {
   return LAUNCHER_CATALOG.find((item) => item.id === id)
 }
 
+/**
+ * Translate a launcher kind label.
+ *
+ * The map above keeps the English text, because that text is also the translation key. Callers
+ * pass the translator so the same data serves every locale.
+ */
+export function launcherKindLabel(kind: LauncherKind, t: TranslateFn): string {
+  return t(LAUNCHER_KIND_LABEL[kind])
+}
+
 export function groupLaunchers<T extends { kind: LauncherKind }>(items: T[]): { kind: LauncherKind; label: string; items: T[] }[] {
   return LAUNCHER_KIND_ORDER.map((kind) => ({
     kind,
     label: LAUNCHER_KIND_LABEL[kind],
     items: items.filter((item) => item.kind === kind)
   })).filter((group) => group.items.length > 0)
+}
+
+/** Translate a launcher label. Brand names stay as they are. */
+export function launcherLabel(id: string, t: TranslateFn): string {
+  const spec = launcherById(id)
+  return spec ? t(spec.label) : ''
+}
+
+/** Translate the description of a built-in launcher. Brand names stay as they are. */
+export function launcherBlurb(id: string, t: TranslateFn): string {
+  const spec = launcherById(id)
+  return spec ? t(spec.blurb) : ''
 }
 
 /** Map legacy editor preference to a launcher id. */

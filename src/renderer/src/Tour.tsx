@@ -1,5 +1,6 @@
 import { Button } from './Button'
 import { useEffect, useState } from 'react'
+import { useT } from './i18n'
 
 export type TourStep = {
   id: string
@@ -47,6 +48,7 @@ export function Tour({
   open: boolean
   onClose: () => void
 }) {
+  const t = useT()
   const [step, setStep] = useState(0)
   const current = STEPS[step]
   const last = step === STEPS.length - 1
@@ -80,15 +82,15 @@ export function Tour({
         <div className="tour-kicker">
           {step + 1} / {STEPS.length}
         </div>
-        <h2 id="tour-title">{current.title}</h2>
-        <p>{current.body}</p>
+        <h2 id="tour-title">{t(current.title)}</h2>
+        <p>{t(current.body)}</p>
         <div className="tour-foot">
           <Button className="ghost" onClick={onClose}>
-            Skip
+            {t('Skip')}
           </Button>
           {step > 0 && (
             <Button className="ghost" onClick={() => setStep((s) => s - 1)}>
-              Back
+              {t('Back')}
             </Button>
           )}
           <Button
@@ -98,7 +100,7 @@ export function Tour({
               else setStep((s) => s + 1)
             }}
           >
-            {last ? 'Start using Spoon' : 'Next'}
+            {last ? t('Start using Spoon') : t('Next')}
           </Button>
         </div>
       </div>

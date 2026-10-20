@@ -2,6 +2,7 @@ export type ThemeMode = 'light' | 'dark'
 export type ThemePack = 'spoon' | 'classic' | 'colored' | 'spacex'
 export type IconStyle = 'mono' | 'color'
 export type AccentId = 'blue' | 'violet' | 'red' | 'teal' | 'amber' | 'silver' | 'custom'
+export type LocaleId = 'en' | 'zh-CN'
 
 export type AiProviderId = string
 
@@ -256,6 +257,8 @@ export interface Settings {
   iconStyle: IconStyle
   accentId: AccentId
   accentCustom?: string
+  /** UI language. English is the fallback for every missing translation. */
+  locale: LocaleId
   gitPath?: string
   fetchIntervalMin: number
   autoFetch: boolean

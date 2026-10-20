@@ -28,6 +28,7 @@ import {
 import { Pencil, Search, X } from 'lucide-react'
 import { avatarColor, bindDrag, clamp, catchErr, formatAgo, initials, openMenu, openWithMenuItems } from './lib'
 import { RecentWork } from './RecentWork'
+import { t, useT } from './i18n'
 
 /** Last known status per repository, kept across Home remounts so returning to Home paints instantly. */
 let overviewMemo: Record<string, RepoOverview> = {}
@@ -75,6 +76,7 @@ export function RepoHome({
   onEditWorkspace,
   onSettings
 }: Props) {
+  const t = useT()
   const [sel, setSel] = useState(recent[0]?.path)
   const [q, setQ] = useState('')
   const [scan, setScan] = useState('')
@@ -202,10 +204,10 @@ export function RepoHome({
   async function scanFolders() {
     const dirs = (await window.spoon.app.pickDirectories()) as string[] | null
     if (!dirs?.length) return
-    setScan(`Scanning ${dirs.length} folder${dirs.length === 1 ? '' : 's'}...`)
+    setScan(t('x.scanningFolders', { count: dirs.length }))
     const off = window.spoon.app.on('scan:progress', (info) => {
       const p = info as { found?: number; looking?: string }
-      setScan(`Found ${p.found ?? 0}... ${p.looking ?? ''}`)
+      setScan(t('x.scanFound', { values: { count: p.found ?? 0, path: p.looking ?? '' } }))
     })
     try {
       const found = (await window.spoon.git.scan(dirs)) as { path: string; name: string }[]
@@ -216,8 +218,8 @@ export function RepoHome({
       if (found[0]) setSel(found[0].path)
       setScan(
         found.length
-          ? `Added ${found.length} repositor${found.length === 1 ? 'y' : 'ies'}.`
-          : 'No Git repositories in those folders.'
+          ? t('x.addedRepositories', { count: found.length })
+          : t('No Git repositories in those folders.')
       )
     } catch (e) {
       setScan(e instanceof Error ? e.message : String(e))
@@ -232,7 +234,7 @@ export function RepoHome({
     try {
       const next = (await window.spoon.repo.rescan()) as RepoSummary[]
       onRecent(next)
-      setScan(next.length ? `Watching ${next.length} repositories.` : 'Scan a folder first.')
+      setScan(next.length ? t('x.watchingRepositories', { count: next.length }) : t('Scan a folder first.'))
       await refreshOverviews(next.map((r) => r.path))
     } catch (e) {
       markAnalyzing(recent.map((r) => r.path), false)
@@ -270,7 +272,7 @@ export function RepoHome({
   }
 
   async function removeRepo(path: string) {
-    const ok = await window.spoon.app.confirm('Remove this repository from the list?', path)
+    const ok = await window.spoon.app.confirm(t('Remove this repository from the list?'), path)
     if (!ok) return
     const next = (await window.spoon.app.removeRecent(path)) as RepoSummary[]
     onRecent(next)
@@ -282,8 +284,8 @@ export function RepoHome({
     const paths = picked.length ? picked : sel ? [sel] : []
     if (!paths.length) return
     const ok = await window.spoon.app.confirm(
-      `Remove ${paths.length} repositor${paths.length === 1 ? 'y' : 'ies'} from the list?`,
-      'This does not delete files on disk.'
+      t('x.removeRepositoriesPrompt', { count: paths.length }),
+      t('This does not delete files on disk.')
     )
     if (!ok) return
     let next = recent
@@ -325,36 +327,36 @@ export function RepoHome({
     if (one) {
       const openItems = openWithMenuItems(launchers, { defaultId: defaultLauncher })
       items.push(
-        { id: 'open', label: 'Open in Spoon' },
+        { id: 'open', label: t('Open in Spoon') },
         {
-          label: 'Open with',
-          submenu: openItems.length ? openItems : [{ label: 'No launchers found', enabled: false }]
+          label: t('Open with'),
+          submenu: openItems.length ? openItems : [{ label: t('No launchers found'), enabled: false }]
         },
         { type: 'separator' }
       )
     }
     items.push(
-      { id: 'fetch', label: 'Fetch' },
-      { id: 'pull', label: 'Pull' },
-      { id: 'push', label: 'Push' },
-      { id: 'refresh', label: 'Refresh' },
+      { id: 'fetch', label: t('Fetch') },
+      { id: 'pull', label: t('Pull') },
+      { id: 'push', label: t('Push') },
+      { id: 'refresh', label: t('Refresh') },
       { type: 'separator' },
-      { id: 'pin', label: 'Pin', enabled: !allPinned },
-      { id: 'unpin', label: 'Unpin', enabled: anyPinned }
+      { id: 'pin', label: t('Pin'), enabled: !allPinned },
+      { id: 'unpin', label: t('Unpin'), enabled: anyPinned }
     )
-    if (unsafe.length) items.push({ id: 'safe', label: 'Mark as safe' })
-    items.push({ id: 'remove', label: 'Remove' }, { type: 'separator' })
-    if (!one) items.push({ id: 'open-ws', label: 'Open workspace' })
-    items.push({ id: 'new-ws', label: one ? 'New workspace' : 'Save workspace' })
+    if (unsafe.length) items.push({ id: 'safe', label: t('Mark as safe') })
+    items.push({ id: 'remove', label: t('Remove') }, { type: 'separator' })
+    if (!one) items.push({ id: 'open-ws', label: t('Open workspace') })
+    items.push({ id: 'new-ws', label: one ? t('New workspace') : t('Save workspace') })
     items.push({
-      label: 'Add to workspace',
+      label: t('Add to workspace'),
       submenu: workspaces.length
         ? workspaces.map((workspace) => ({
             id: `add:${workspace.id}`,
             label: workspace.name,
             enabled: paths.some((item) => !workspace.repos.some((repoPath) => repoPath.toLowerCase() === item.toLowerCase()))
           }))
-        : [{ label: 'No saved workspaces', enabled: false }]
+        : [{ label: t('No saved workspaces'), enabled: false }]
     })
     openMenu(items, (id) => {
       if (id === 'open' && repo) onOpen(repo.path, repo.name)
@@ -376,7 +378,7 @@ export function RepoHome({
   function openWithMenu(path: string) {
     const items = openWithMenuItems(launchers, { defaultId: defaultLauncher })
     if (!items.length) {
-      void window.spoon.app.error('No editors, agents, or CLIs found on PATH.')
+      void window.spoon.app.error(t('No editors, agents, or CLIs found on PATH.'))
       return
     }
     openMenu(items, (id) => {
@@ -395,8 +397,10 @@ export function RepoHome({
 
   async function removePaths(paths: string[]) {
     const ok = await window.spoon.app.confirm(
-      paths.length === 1 ? 'Remove this repository from the list?' : `Remove ${paths.length} repositories from the list?`,
-      paths.length === 1 ? paths[0] : 'This does not delete files on disk.'
+      paths.length === 1
+        ? t('Remove this repository from the list?')
+        : t('x.removeRepositoriesPrompt', { count: paths.length }),
+      paths.length === 1 ? paths[0] : t('This does not delete files on disk.')
     )
     if (!ok) return
     let next = recent
@@ -441,7 +445,9 @@ export function RepoHome({
 
   const counts = useMemo(() => summarize(overviews, recent), [overviews, recent])
   const actionCount = picked.length || filtered.length
-  const actionHint = picked.length ? `${picked.length} selected` : `all ${filtered.length}`
+  const actionHint = picked.length
+    ? t('x.selectedCount', { count: picked.length })
+    : t('x.shownCount', { count: filtered.length })
   const many = picked.length > 1
   const unsafePicked = picked.filter((path) => overviews[path]?.unsafe)
 
@@ -456,7 +462,7 @@ export function RepoHome({
         const name = recent.find((r) => r.path === path)?.name ?? path
         try {
           await window.spoon.repo.fix(path, 'safe-directory')
-          results.push({ path, name, ok: true, message: 'Trusted' })
+          results.push({ path, name, ok: true, message: t('Trusted') })
         } catch (e) {
           results.push({
             path,
@@ -494,18 +500,18 @@ export function RepoHome({
 
   return (
     <div className="manager home">
-      <aside className="mgr-side home-side" style={{ width }} aria-label="Repositories">
+      <aside className="mgr-side home-side" style={{ width }} aria-label={t('Repositories')}>
         <div className="side-filter">
           <label className="home-search">
             <Search size={14} aria-hidden />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Filter repositories"
-              aria-label="Filter repositories"
+              placeholder={t('Filter repositories')}
+              aria-label={t('Filter repositories')}
             />
             {q && (
-              <Button variant="icon" className="home-search-clear" aria-label="Clear filter" onClick={() => setQ('')}>
+              <Button variant="icon" className="home-search-clear" aria-label={t('Clear filter')} onClick={() => setQ('')}>
                 <X size={12} />
               </Button>
             )}
@@ -514,9 +520,9 @@ export function RepoHome({
         </div>
         <div className="home-side-scroll">
           {workspaces.length > 0 && (
-            <section className="home-side-group" aria-label="Workspaces">
+            <section className="home-side-group" aria-label={t('Workspaces')}>
               <div className="side-sec">
-                <span>Workspaces</span>
+                <span>{t('Workspaces')}</span>
                 <span className="counter">{workspaces.length}</span>
               </div>
               {workspaces.map((workspace) => (
@@ -537,8 +543,8 @@ export function RepoHome({
                   <span className="row-tools">
                     <Button
                       variant="icon"
-                      aria-label={`Edit ${workspace.name}`}
-                      title="Edit workspace"
+                      aria-label={t('x.editNamed', { values: { name: workspace.name } })}
+                      title={t('Edit workspace')}
                       onClick={(event) => {
                         event.stopPropagation()
                         onEditWorkspace(workspace)
@@ -549,12 +555,12 @@ export function RepoHome({
                     <Button
                       variant="icon"
                       className="danger"
-                      aria-label={`Delete ${workspace.name}`}
-                      title="Delete workspace"
+                      aria-label={t('x.deleteNamed', { values: { name: workspace.name } })}
+                      title={t('Delete workspace')}
                       onClick={(event) => {
                         event.stopPropagation()
                         void window.spoon.app
-                          .confirm(`Delete workspace “${workspace.name}”?`, 'Repositories stay on disk and in the list.')
+                          .confirm(t('x.deleteWorkspacePrompt', { values: { name: workspace.name } }), t('Repositories stay on disk and in the list.'))
                           .then((ok) => {
                             if (ok) onDeleteWorkspace(workspace.id)
                           })
@@ -567,18 +573,18 @@ export function RepoHome({
               ))}
             </section>
           )}
-          <section className="home-side-group" aria-label="Repository list">
+          <section className="home-side-group" aria-label={t('Repository list')}>
             <div className="side-sec">
-              <span>Repositories</span>
+              <span>{t('Repositories')}</span>
               <span className="counter">{filtered.length}</span>
               <span className="side-sec-tools">
                 {picked.length > 0 ? (
-                  <Button variant="link" title="Clear selection" onClick={() => setPicked([])}>
-                    Clear ({picked.length})
+                  <Button variant="link" title={t('Clear selection')} onClick={() => setPicked([])}>
+                    {t('x.clearCount', { count: picked.length })}
                   </Button>
                 ) : (
-                  <Button variant="link" title="Select all visible" onClick={() => setPicked(filtered.map((r) => r.path))}>
-                    Select all
+                  <Button variant="link" title={t('Select all visible')} onClick={() => setPicked(filtered.map((r) => r.path))}>
+                    {t('Select all')}
                   </Button>
                 )}
               </span>
@@ -610,7 +616,7 @@ export function RepoHome({
                     openRepoMenu(r.path)
                   }}
                 >
-                  <span className="dot-wrap" title={checking ? 'Analyzing...' : dotTitle(o, isPinned)}>
+                  <span className="dot-wrap" title={checking ? t('Analyzing...') : dotTitle(o, isPinned)}>
                     <span className={`dot ${dotTone(o)}`} />
                   </span>
                   <span className="label">{r.name}</span>
@@ -621,7 +627,7 @@ export function RepoHome({
             })}
             {!filtered.length && (
               <div className="home-side-empty">
-                {recent.length ? emptyFilterLabel(statusFilter, !!q.trim()) : 'No repositories yet'}
+                {recent.length ? emptyFilterLabel(statusFilter, !!q.trim()) : t('No repositories yet')}
               </div>
             )}
           </section>
@@ -643,68 +649,74 @@ export function RepoHome({
           <header className="home-head">
             <div className="home-title">
               <span className="home-eyebrow">{greeting}</span>
-              <h1>Home</h1>
+              <h1>{t('Home')}</h1>
               <p className="home-sub">
                 {totalRepos
-                  ? `${totalRepos} repositor${totalRepos === 1 ? 'y' : 'ies'}${workspaces.length ? ` · ${workspaces.length} workspace${workspaces.length === 1 ? '' : 's'}` : ''}${attention ? ` · ${attention} need${attention === 1 ? 's' : ''} attention` : ''}`
-                  : 'Add your first repository to get started.'}
+                  ? t('x.homeSummary', {
+                      values: {
+                        repositories: totalRepos,
+                        workspaces: workspaces.length,
+                        attention
+                      }
+                    })
+                  : t('Add your first repository to get started.')}
               </p>
             </div>
-            <div className="home-actions" role="toolbar" aria-label="Add repositories">
+            <div className="home-actions" role="toolbar" aria-label={t('Add repositories')}>
               <Button
                 variant="icon"
                 className="home-icon-btn"
-                title="Rescan watched folders"
-                aria-label="Rescan watched folders"
+                title={t('Rescan watched folders')}
+                aria-label={t('Rescan watched folders')}
                 aria-busy={busy === 'rescan' || undefined}
                 disabled={!settings?.watchedRoots?.length || !!busy}
                 onClick={() => void rescan()}
               >
                 <IcoRefresh />
               </Button>
-              <Button variant="secondary" title="Find every Git repo inside the folders you pick" onClick={() => void scanFolders()}>
+              <Button variant="secondary" title={t('Find every Git repo inside the folders you pick')} onClick={() => void scanFolders()}>
                 <IcoScan />
-                Scan folders
+                {t('Scan folders')}
               </Button>
-              <Button variant="secondary" title="Create a new repository" onClick={onInit}>
+              <Button variant="secondary" title={t('Create a new repository')} onClick={onInit}>
                 <IcoCreate />
-                New
+                {t('New')}
               </Button>
-              <Button variant="secondary" title="Add a Git folder, or find every repo inside it" onClick={onAdd}>
+              <Button variant="secondary" title={t('Add a Git folder, or find every repo inside it')} onClick={onAdd}>
                 <IcoAddRepo />
-                Add
+                {t('Add')}
               </Button>
-              <Button variant="primary" className="primary" title="Clone from a Git URL" onClick={onClone}>
+              <Button variant="primary" className="primary" title={t('Clone from a Git URL')} onClick={onClone}>
                 <IcoClone />
-                Clone
+                {t('Clone')}
               </Button>
             </div>
           </header>
 
           {totalRepos > 0 && (
-          <section className="home-overview" aria-label="Repository status">
-            <div className="stat-row" role="toolbar" aria-label="Filter repositories by status">
-              <StatChip id="all" count={counts.total} label="Repositories" hint="Show all repositories" active={statusFilter === 'all'} onClick={toggleFilter} />
-              <StatChip id="dirty" count={counts.dirty} label="Uncommitted" tone="warn" hint="Show repositories with uncommitted changes" active={statusFilter === 'dirty'} onClick={toggleFilter} />
-              <StatChip id="behind" count={counts.behind} label="Behind" tone="info" hint="Show repositories behind their remote" active={statusFilter === 'behind'} onClick={toggleFilter} />
-              <StatChip id="ahead" count={counts.ahead} label="To push" tone="info" hint="Show repositories with commits to push" active={statusFilter === 'ahead'} onClick={toggleFilter} />
-              <StatChip id="blocked" count={counts.broken} label="Attention" tone="err" hint="Show repositories that need attention" active={statusFilter === 'blocked'} onClick={toggleFilter} />
+          <section className="home-overview" aria-label={t('Repository status')}>
+            <div className="stat-row" role="toolbar" aria-label={t('Filter repositories by status')}>
+              <StatChip id="all" count={counts.total} label={t('Repositories')} hint={t('Show all repositories')} active={statusFilter === 'all'} onClick={toggleFilter} />
+              <StatChip id="dirty" count={counts.dirty} label={t('Uncommitted')} tone="warn" hint={t('Show repositories with uncommitted changes')} active={statusFilter === 'dirty'} onClick={toggleFilter} />
+              <StatChip id="behind" count={counts.behind} label={t('Behind')} tone="info" hint={t('Show repositories behind their remote')} active={statusFilter === 'behind'} onClick={toggleFilter} />
+              <StatChip id="ahead" count={counts.ahead} label={t('To push')} tone="info" hint={t('Show repositories with commits to push')} active={statusFilter === 'ahead'} onClick={toggleFilter} />
+              <StatChip id="blocked" count={counts.broken} label={t('Attention')} tone="err" hint={t('Show repositories that need attention')} active={statusFilter === 'blocked'} onClick={toggleFilter} />
             </div>
-            <div className="home-sync" role="toolbar" aria-label={`Sync ${actionHint}`}>
+            <div className="home-sync" role="toolbar" aria-label={t('x.syncAction', { values: { scope: actionHint } })}>
               <span className="home-sync-label">
-                Sync <b>{picked.length ? `${picked.length} selected` : `${filtered.length} shown`}</b>
+                {t('Sync')} <b>{picked.length ? t('x.selectedCount', { count: picked.length }) : t('x.shownCount', { count: filtered.length })}</b>
               </span>
               <div className="home-seg">
-                <SyncBtn label="Refresh" hint={`Refresh status of ${actionHint}`} disabled={!!busy || !actionCount} busy={busy === 'refresh'} onClick={() => void runBulk('refresh')}>
+                <SyncBtn label={t('Refresh')} hint={t('x.refreshStatusOf', { values: { scope: actionHint } })} disabled={!!busy || !actionCount} busy={busy === 'refresh'} onClick={() => void runBulk('refresh')}>
                   <IcoRefresh />
                 </SyncBtn>
-                <SyncBtn label="Fetch" hint={`Fetch remotes for ${actionHint}`} disabled={!!busy || !actionCount} busy={busy === 'fetch'} onClick={() => void runBulk('fetch')}>
+                <SyncBtn label={t('Fetch')} hint={t('x.fetchRemotesFor', { values: { scope: actionHint } })} disabled={!!busy || !actionCount} busy={busy === 'fetch'} onClick={() => void runBulk('fetch')}>
                   <IcoFetch />
                 </SyncBtn>
-                <SyncBtn label="Pull" hint={`Pull ${actionHint}`} disabled={!!busy || !actionCount} busy={busy === 'pull'} onClick={() => void runBulk('pull')}>
+                <SyncBtn label={t('Pull')} hint={t('x.pullScope', { values: { scope: actionHint } })} disabled={!!busy || !actionCount} busy={busy === 'pull'} onClick={() => void runBulk('pull')}>
                   <IcoPull />
                 </SyncBtn>
-                <SyncBtn label="Push" hint={`Push ${actionHint}`} disabled={!!busy || !actionCount} busy={busy === 'push'} onClick={() => void runBulk('push')}>
+                <SyncBtn label={t('Push')} hint={t('x.pushScope', { values: { scope: actionHint } })} disabled={!!busy || !actionCount} busy={busy === 'push'} onClick={() => void runBulk('push')}>
                   <IcoPush />
                 </SyncBtn>
               </div>
@@ -715,7 +727,7 @@ export function RepoHome({
           {scan ? (
             <p className={`home-notice${busy || scan.endsWith('...') ? ' working' : ''}`} title={scan} role="status">
               {scan}
-              <Button variant="icon" aria-label="Dismiss" onClick={() => setScan('')}>
+              <Button variant="icon" aria-label={t('Dismiss')} onClick={() => setScan('')}>
                 <X size={12} />
               </Button>
             </p>
@@ -724,40 +736,40 @@ export function RepoHome({
           {bulk && <BulkSummary results={bulk} onClear={() => setBulk(null)} />}
 
           {many ? (
-            <section className="home-card repo-card pop-in" aria-label="Selected repositories">
+            <section className="home-card repo-card pop-in" aria-label={t('Selected repositories')}>
               <div className="repo-card-top">
                 <div className="repo-id">
                   <span className="repo-mark multi" aria-hidden>
                     {picked.length}
                   </span>
                   <div className="repo-id-copy">
-                    <h2>{picked.length} repositories selected</h2>
-                    <div className="hint">Ctrl-click to pick several · Shift-click a range</div>
+                    <h2>{t('x.repositoriesSelected', { count: picked.length })}</h2>
+                    <div className="hint">{t('Ctrl-click to pick several · Shift-click a range')}</div>
                   </div>
                 </div>
                 <div className="repo-actions">
-                  <div className="home-seg" role="toolbar" aria-label="Organize selected">
-                    <IconAct bare label="Save workspace" hint="Save the selection as a workspace" onClick={() => onSaveWorkspace(picked)}>
+                  <div className="home-seg" role="toolbar" aria-label={t('Organize selected')}>
+                    <IconAct bare label={t('Save workspace')} hint={t('Save the selection as a workspace')} onClick={() => onSaveWorkspace(picked)}>
                       <IcoSave />
                     </IconAct>
                     {unsafePicked.length > 0 && (
-                      <IconAct bare label="Mark safe" hint={`Mark ${unsafePicked.length} as safe`} disabled={!!busy} busy={busy === 'safe'} onClick={() => void markSafe(unsafePicked)}>
+                      <IconAct bare label={t('Mark safe')} hint={t('x.markAsSafeCount', { count: unsafePicked.length })} disabled={!!busy} busy={busy === 'safe'} onClick={() => void markSafe(unsafePicked)}>
                         <IcoShield />
                       </IconAct>
                     )}
-                    <IconAct bare label="Pin" hint="Pin selected" onClick={() => void pinPicked(true)}>
+                    <IconAct bare label={t('Pin')} hint={t('Pin selected')} onClick={() => void pinPicked(true)}>
                       <IcoPin filled />
                     </IconAct>
-                    <IconAct bare label="Unpin" hint="Unpin selected" onClick={() => void pinPicked(false)}>
+                    <IconAct bare label={t('Unpin')} hint={t('Unpin selected')} onClick={() => void pinPicked(false)}>
                       <IcoUnpin />
                     </IconAct>
-                    <IconAct bare label="Remove" hint="Remove selected from the list" danger onClick={() => void removePicked()}>
+                    <IconAct bare label={t('Remove')} hint={t('Remove selected from the list')} danger onClick={() => void removePicked()}>
                       <IcoTrash />
                     </IconAct>
                   </div>
                   <Button className="primary ico-text" variant="primary" onClick={() => onOpenSelection(picked)}>
                     <IcoWorkspaces />
-                    Open workspace
+                    {t('Open workspace')}
                   </Button>
                 </div>
               </div>
@@ -784,20 +796,20 @@ export function RepoHome({
               <div className="home-empty-mark" aria-hidden>
                 <SpoonMark />
               </div>
-              <h2>No repositories yet</h2>
-              <p>Clone a remote, add a folder you already have, or scan a directory to find every Git repository inside it.</p>
+              <h2>{t('No repositories yet')}</h2>
+              <p>{t('Clone a remote, add a folder you already have, or scan a directory to find every Git repository inside it.')}</p>
               <div className="home-empty-actions">
                 <Button variant="primary" className="primary" onClick={onClone}>
                   <IcoClone />
-                  Clone repository
+                  {t('Clone repository')}
                 </Button>
                 <Button variant="secondary" onClick={onAdd}>
                   <IcoAddRepo />
-                  Add existing
+                  {t('Add existing')}
                 </Button>
                 <Button variant="secondary" onClick={() => void scanFolders()}>
                   <IcoScan />
-                  Scan folders
+                  {t('Scan folders')}
                 </Button>
               </div>
             </section>
@@ -825,18 +837,18 @@ export function RepoHome({
 
 function homeGreeting(): string {
   const hour = new Date().getHours()
-  if (hour < 5) return 'Working late'
-  if (hour < 12) return 'Good morning'
-  if (hour < 19) return 'Good afternoon'
-  return 'Good evening'
+  if (hour < 5) return t('Working late')
+  if (hour < 12) return t('Good morning')
+  if (hour < 19) return t('Good afternoon')
+  return t('Good evening')
 }
 
 function syncLabel(o: RepoOverview): string {
-  if (!o.upstream && !o.ahead && !o.behind) return o.remoteUrl ? 'Up to date' : 'Local only'
+  if (!o.upstream && !o.ahead && !o.behind) return o.remoteUrl ? t('Up to date') : t('Local only')
   const bits: string[] = []
-  if (o.ahead) bits.push(`${o.ahead} to push`)
-  if (o.behind) bits.push(`${o.behind} to pull`)
-  return bits.length ? bits.join(' · ') : 'Up to date'
+  if (o.ahead) bits.push(t('x.toPushCount', { count: o.ahead }))
+  if (o.behind) bits.push(t('x.toPullCount', { count: o.behind }))
+  return bits.length ? bits.join(' · ') : t('Up to date')
 }
 
 function SyncBtn({
@@ -871,16 +883,17 @@ function SyncBtn({
 }
 
 function RepoMetrics({ overview, analyzing }: { overview?: RepoOverview; analyzing?: boolean }) {
+  const t = useT()
   if (!overview) return <span className="metrics"><span className="metric working">···</span></span>
   const items: { key: string; text: string; cls: string; title: string }[] = []
-  if (overview.unsafe) items.push({ key: 'u', text: 'unsafe', cls: 'err', title: 'Git does not trust this folder' })
-  else if (overview.error) items.push({ key: 'e', text: 'error', cls: 'err', title: overview.error })
-  if (overview.operation) items.push({ key: 'o', text: overview.operation, cls: 'warn', title: `${overview.operation} in progress` })
-  if (overview.conflicts) items.push({ key: 'c', text: `!${overview.conflicts}`, cls: 'err', title: `${overview.conflicts} conflict(s)` })
+  if (overview.unsafe) items.push({ key: 'u', text: t('unsafe'), cls: 'err', title: t('Git does not trust this folder') })
+  else if (overview.error) items.push({ key: 'e', text: t('error'), cls: 'err', title: overview.error })
+  if (overview.operation) items.push({ key: 'o', text: overview.operation, cls: 'warn', title: t('x.operationInProgress', { values: { operation: overview.operation } }) })
+  if (overview.conflicts) items.push({ key: 'c', text: `!${overview.conflicts}`, cls: 'err', title: t('x.conflictsCount', { count: overview.conflicts }) })
   const dirty = overview.staged + overview.unstaged + overview.untracked
-  if (dirty) items.push({ key: 'd', text: `●${dirty}`, cls: 'warn', title: `${dirty} changed` })
-  if (overview.behind) items.push({ key: 'b', text: `↓${overview.behind}`, cls: 'info', title: `${overview.behind} behind` })
-  if (overview.ahead) items.push({ key: 'a', text: `↑${overview.ahead}`, cls: 'info', title: `${overview.ahead} ahead` })
+  if (dirty) items.push({ key: 'd', text: `●${dirty}`, cls: 'warn', title: t('x.changedCount', { count: dirty }) })
+  if (overview.behind) items.push({ key: 'b', text: `↓${overview.behind}`, cls: 'info', title: t('x.behindCount', { count: overview.behind }) })
+  if (overview.ahead) items.push({ key: 'a', text: `↑${overview.ahead}`, cls: 'info', title: t('x.aheadCount', { count: overview.ahead }) })
   if (!items.length && !analyzing) return null
   return (
     <span className={`metrics${analyzing ? ' working' : ''}`}>
@@ -918,7 +931,7 @@ function StatChip({
       className={`stat-pill${toneClass}${active ? ' on' : ''}`}
       aria-pressed={active}
       title={hint}
-      aria-label={`${hint} (${count})`}
+      aria-label={t('x.hintWithCount', { values: { hint, count } })}
       disabled={empty}
       onClick={() => onClick(id)}
     >
@@ -941,6 +954,7 @@ const SORT_OPTIONS: { value: RepoSort; label: string }[] = [
 ]
 
 function SortMenu({ value, onChange }: { value: RepoSort; onChange: (value: RepoSort) => void }) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const [hi, setHi] = useState(value)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -988,7 +1002,7 @@ function SortMenu({ value, onChange }: { value: RepoSort; onChange: (value: Repo
         ref={btnRef}
         type="button"
         className="menu-select-btn"
-        aria-label="Sort repositories"
+        aria-label={t('Sort repositories')}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls="repo-sort-list"
@@ -1006,11 +1020,11 @@ function SortMenu({ value, onChange }: { value: RepoSort; onChange: (value: Repo
           }
         }}
       >
-        <span>{current.label}</span>
+        <span>{t(current.label)}</span>
         <IcoChevron />
       </Button>
       {open && (
-        <ul id="repo-sort-list" className="menu-select-list" role="listbox" aria-label="Sort repositories">
+        <ul id="repo-sort-list" className="menu-select-list" role="listbox" aria-label={t('Sort repositories')}>
           {SORT_OPTIONS.map((o) => (
             <li key={o.value} role="presentation">
               <Button
@@ -1021,7 +1035,7 @@ function SortMenu({ value, onChange }: { value: RepoSort; onChange: (value: Repo
                 onMouseEnter={() => setHi(o.value)}
                 onClick={() => pick(o.value)}
               >
-                {o.label}
+                {t(o.label)}
               </Button>
             </li>
           ))}
@@ -1086,6 +1100,7 @@ function HealthList({
   onFixSafe: () => void
   onDeep: () => void
 }) {
+  const t = useT()
   const issues = health?.issues ?? []
   const ok = !issues.length
   const canAuto = issues.some((i) => i.fix && !i.fix.destructive && i.fix.id !== 'set-identity')
@@ -1093,14 +1108,14 @@ function HealthList({
     <div className={`health${ok ? ' ok' : ''}`}>
       <div className="health-head">
         <span className={`health-dot${ok ? ' ok' : ' warn'}`} aria-hidden />
-        <strong>Health</strong>
-        <span className="hint">{ok ? 'Looks good' : `${issues.length} issue${issues.length === 1 ? '' : 's'}`}</span>
-        <div className="cluster" role="toolbar" aria-label="Health actions">
-          <IconAct bare label="Deep check" hint="Run git fsck" onClick={onDeep}>
+        <strong>{t('Health')}</strong>
+        <span className="hint">{ok ? t('Looks good') : t('x.issueCount', { count: issues.length })}</span>
+        <div className="cluster" role="toolbar" aria-label={t('Health actions')}>
+          <IconAct bare label={t('Deep check')} hint={t('Run git fsck')} onClick={onDeep}>
             <IcoDeep />
           </IconAct>
           {canAuto && (
-            <IconAct bare label="Fix safe issues" hint="Fix safe issues automatically" onClick={onFixSafe}>
+            <IconAct bare label={t('Fix safe issues')} hint={t('Fix safe issues automatically')} onClick={onFixSafe}>
               <IcoWrench />
             </IconAct>
           )}
@@ -1114,7 +1129,7 @@ function HealthList({
           </div>
           {issue.fix && (
             <Button className={`ghost ${issue.fix.destructive ? 'danger' : ''}`} onClick={() => onFix(issue.fix!.id)}>
-              {issue.fix.label}
+              {t(issue.fix.label)}
             </Button>
           )}
         </div>
@@ -1124,6 +1139,7 @@ function HealthList({
 }
 
 function BulkSummary({ results, onClear }: { results: BulkResult[]; onClear: () => void }) {
+  const t = useT()
   const ok = results.filter((r) => r.ok && !r.skipped).length
   const skip = results.filter((r) => r.skipped).length
   const fail = results.filter((r) => !r.ok).length
@@ -1131,11 +1147,11 @@ function BulkSummary({ results, onClear }: { results: BulkResult[]; onClear: () 
     <div className="bulk-summary pop-in">
       <div>
         <b>
-          {ok} done - {skip} skipped - {fail} failed
+          {t('x.bulkResultCounts', { values: { done: ok, skipped: skip, failed: fail } })}
         </b>
       </div>
       <Button className="ghost" onClick={onClear}>
-        Dismiss
+        {t('Dismiss')}
       </Button>
       {fail > 0 && (
         <ul>
@@ -1162,8 +1178,9 @@ function RepoBadges({
   compact?: boolean
   analyzing?: boolean
 }) {
+  const t = useT()
   if (!overview) {
-    const label = analyzing ? 'Analyzing...' : 'Waiting...'
+    const label = analyzing ? t('Analyzing...') : t('Waiting...')
     return compact ? (
       <span className="badges">
         <span className={`chip${analyzing ? ' working' : ''}`}>{label}</span>
@@ -1173,16 +1190,16 @@ function RepoBadges({
     )
   }
   const bits: { key: string; label: string; cls: string }[] = []
-  if (analyzing) bits.push({ key: 'scan', label: 'Analyzing...', cls: 'working' })
-  if (overview.unsafe) bits.push({ key: 'unsafe', label: 'unsafe', cls: 'err' })
-  else if (overview.error) bits.push({ key: 'err', label: 'error', cls: 'err' })
+  if (analyzing) bits.push({ key: 'scan', label: t('Analyzing...'), cls: 'working' })
+  if (overview.unsafe) bits.push({ key: 'unsafe', label: t('unsafe'), cls: 'err' })
+  else if (overview.error) bits.push({ key: 'err', label: t('error'), cls: 'err' })
   if (overview.operation) bits.push({ key: 'op', label: overview.operation, cls: 'warn' })
-  if (overview.conflicts) bits.push({ key: 'c', label: `${overview.conflicts} conflict`, cls: 'err' })
+  if (overview.conflicts) bits.push({ key: 'c', label: t('x.conflictsCount', { count: overview.conflicts }), cls: 'err' })
   const dirty = overview.staged + overview.unstaged + overview.untracked
-  if (dirty) bits.push({ key: 'd', label: `${dirty} changed`, cls: 'warn' })
-  if (overview.behind) bits.push({ key: 'b', label: `${overview.behind} behind`, cls: 'info' })
-  if (overview.ahead) bits.push({ key: 'a', label: `${overview.ahead} ahead`, cls: 'info' })
-  if (!bits.length && !compact) bits.push({ key: 'ok', label: 'clean', cls: 'ok' })
+  if (dirty) bits.push({ key: 'd', label: t('x.changedCount', { count: dirty }), cls: 'warn' })
+  if (overview.behind) bits.push({ key: 'b', label: t('x.behindCount', { count: overview.behind }), cls: 'info' })
+  if (overview.ahead) bits.push({ key: 'a', label: t('x.aheadCount', { count: overview.ahead }), cls: 'info' })
+  if (!bits.length && !compact) bits.push({ key: 'ok', label: t('clean'), cls: 'ok' })
   if (!bits.length) return null
   return (
     <span className="badges">
@@ -1205,16 +1222,16 @@ function dotTone(o?: RepoOverview): string {
 
 function dotTitle(o: RepoOverview | undefined, pinned: boolean): string {
   const bits: string[] = []
-  if (pinned) bits.push('Pinned')
-  if (!o) return bits.join(' · ') || 'Analyzing...'
-  if (o.unsafe) bits.push('Git does not trust this folder')
+  if (pinned) bits.push(t('Pinned'))
+  if (!o) return bits.join(' · ') || t('Analyzing...')
+  if (o.unsafe) bits.push(t('Git does not trust this folder'))
   else if (o.error) bits.push(o.error)
-  if (o.conflicts) bits.push(`${o.conflicts} conflict(s)`)
+  if (o.conflicts) bits.push(t('x.conflictsCount', { count: o.conflicts }))
   const dirty = o.staged + o.unstaged + o.untracked
-  if (dirty) bits.push(`${dirty} changed`)
-  if (o.behind) bits.push(`${o.behind} behind`)
-  if (o.ahead) bits.push(`${o.ahead} ahead`)
-  if (!bits.length) bits.push('Clean')
+  if (dirty) bits.push(t('x.changedCount', { count: dirty }))
+  if (o.behind) bits.push(t('x.behindCount', { count: o.behind }))
+  if (o.ahead) bits.push(t('x.aheadCount', { count: o.ahead }))
+  if (!bits.length) bits.push(t('Clean'))
   return bits.join(' · ')
 }
 
@@ -1252,12 +1269,12 @@ function matchesStatus(o: RepoOverview | undefined, filter: StatusFilter): boole
 }
 
 function emptyFilterLabel(filter: StatusFilter, hasQuery: boolean): string {
-  if (hasQuery) return 'No matches.'
-  if (filter === 'dirty') return 'No dirty repositories.'
-  if (filter === 'behind') return 'No repositories behind remote.'
-  if (filter === 'ahead') return 'Nothing to push.'
-  if (filter === 'blocked') return 'No blocked repositories.'
-  return 'No matches.'
+  if (hasQuery) return t('No matches.')
+  if (filter === 'dirty') return t('No dirty repositories.')
+  if (filter === 'behind') return t('No repositories behind remote.')
+  if (filter === 'ahead') return t('Nothing to push.')
+  if (filter === 'blocked') return t('No blocked repositories.')
+  return t('No matches.')
 }
 
 function summarize(overviews: Record<string, RepoOverview>, recent: RepoSummary[]) {
@@ -1301,6 +1318,7 @@ export function HealthDialog({
   onClose: () => void
   onOpen?: (path: string) => void
 }) {
+  const t = useT()
   const [health, setHealth] = useState<RepoHealth | null>(null)
   const [identity, setIdentity] = useState<{ name: string; email: string } | null>(null)
 
@@ -1316,7 +1334,7 @@ export function HealthDialog({
     <div className="dialog-back" onMouseDown={onClose}>
       <div className="dialog" onMouseDown={(e) => e.stopPropagation()}>
         <div className="dialog-head">
-          <h2>Health check</h2>
+          <h2>{t('Health check')}</h2>
         </div>
         <div className="dialog-body">
           <p className="hint">{path}</p>
@@ -1347,7 +1365,7 @@ export function HealthDialog({
           {identity && (
             <form
               className="identity-form"
-              aria-label="Commit identity"
+              aria-label={t('Commit identity')}
               onSubmit={(e) => {
                 e.preventDefault()
                 void catchErr(async () => {
@@ -1358,20 +1376,20 @@ export function HealthDialog({
               }}
             >
               <label>
-                Name
+                {t('Name')}
                 <input autoFocus value={identity.name} onChange={(e) => setIdentity({ ...identity, name: e.target.value })} placeholder="Ada Lovelace" />
               </label>
               <label>
-                Email
+                {t('Email')}
                 <input type="email" value={identity.email} onChange={(e) => setIdentity({ ...identity, email: e.target.value })} placeholder="ada@example.com" />
               </label>
-              <p className="hint">Saved to your global Git config (user.name and user.email).</p>
+              <p className="hint">{t('Saved to your global Git config (user.name and user.email).')}</p>
               <div className="row-btns">
                 <Button className="ghost" type="button" onClick={() => setIdentity(null)}>
-                  Cancel
+                  {t('Cancel')}
                 </Button>
                 <Button className="primary" type="submit" disabled={!identity.name.trim() || !identity.email.trim()}>
-                  Save identity
+                  {t('Save identity')}
                 </Button>
               </div>
             </form>
@@ -1379,11 +1397,11 @@ export function HealthDialog({
           <div className="dialog-foot">
             {onOpen && (
               <Button className="ghost" onClick={() => onOpen(path)}>
-                Open repo
+                {t('Open repo')}
               </Button>
             )}
             <Button className="primary" onClick={onClose}>
-              Close
+              {t('Close')}
             </Button>
           </div>
         </div>

@@ -8,6 +8,7 @@ import { findAiSite } from '../shared/ai-catalog'
 import { PAID_AI_PROVIDERS, providerLabel as sharedProviderLabel } from '../shared/models'
 import type { AiAccount, AiEndpointConfig, AiProviderId, Settings } from '../shared/types'
 import { clearCreds, getSettings, loadCreds, patchSettings, saveCreds, type StoredAiCreds } from './store'
+import { mt } from './i18n'
 
 const GROK_CLIENT = 'b1a00492-073a-47ea-816f-4c329264a828'
 const GROK_AUTH = 'https://auth.x.ai/oauth2/authorize'
@@ -112,7 +113,7 @@ function readCodexLocal(): StoredAiCreds | null {
 export function importLocal(provider: AiProviderId): StoredAiCreds {
   const creds =
     provider === 'grok' ? readGrokLocal() : provider === 'claude' ? readClaudeLocal() : readCodexLocal()
-  if (!creds) throw new Error(`No local ${provider} session found.`)
+  if (!creds) throw new Error(mt('x.noLocalSession', { values: { provider } }))
   saveCreds(creds)
   return creds
 }
@@ -126,7 +127,7 @@ export function saveApiKey(provider: AiProviderId, apiKey: string): StoredAiCred
     apiKey: trimmed || undefined,
     label: trimmed
       ? site
-        ? `${site.label} API key`
+        ? mt('x.apiKeyLabel', { values: { label: site.label } })
         : provider === 'grok'
           ? 'xAI API key'
           : provider === 'claude'
@@ -212,7 +213,7 @@ export async function startGrokDevice(): Promise<DeviceFlow> {
   })
   if (!res.ok) {
     const t = await res.text()
-    throw new Error(`Grok device login failed: ${res.status} ${t}`)
+    throw new Error(mt('x.grokDeviceLoginFailed', { values: { status: res.status, body: t } }))
   }
   const data = (await res.json()) as {
     device_code: string
@@ -265,7 +266,7 @@ export async function pollGrokDevice(flow: DeviceFlow): Promise<StoredAiCreds> {
       throw new Error(data.error_description || data.error)
     }
   }
-  throw new Error('Grok sign-in timed out.')
+  throw new Error(mt('Grok sign-in timed out.'))
 }
 
 export async function startGrokPkce(parent?: BrowserWindow): Promise<StoredAiCreds> {
@@ -295,7 +296,7 @@ export async function startGrokPkce(parent?: BrowserWindow): Promise<StoredAiCre
     })
   })
   const data = (await res.json()) as Record<string, string>
-  if (!data.access_token) throw new Error(data.error_description || data.error || 'Grok OAuth failed')
+  if (!data.access_token) throw new Error(data.error_description || data.error || mt('Grok OAuth failed'))
   const creds: StoredAiCreds = {
     provider: 'grok',
     method: 'oauth',
@@ -324,12 +325,12 @@ function waitForCode(authUrl: string, port: number, state: string, parent?: Brow
         const st = u.searchParams.get('state')
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
         res.end(
-          '<html><body style="font-family:Segoe UI,sans-serif;padding:40px">You can close this window and return to Spoon.</body></html>'
+          `<html><body style="font-family:Segoe UI,sans-serif;padding:40px">${mt('You can close this window and return to Spoon.')}</body></html>`
         )
         server.close()
         child?.close()
         if (err) reject(new Error(err))
-        else if (!code || st !== state) reject(new Error('Invalid OAuth response'))
+        else if (!code || st !== state) reject(new Error(mt('Invalid OAuth response')))
         else resolvePromise(code)
       } catch (e) {
         reject(e)
@@ -345,7 +346,7 @@ function waitForCode(authUrl: string, port: number, state: string, parent?: Brow
           height: 720,
           parent,
           autoHideMenuBar: true,
-          title: 'Sign in'
+          title: mt('Sign in')
         })
       : null
     if (child) {
@@ -356,7 +357,7 @@ function waitForCode(authUrl: string, port: number, state: string, parent?: Brow
     }
     setTimeout(() => {
       server.close()
-      reject(new Error('OAuth timed out'))
+      reject(new Error(mt('OAuth timed out')))
     }, 5 * 60 * 1000)
   })
 }
@@ -395,7 +396,7 @@ export async function openProviderConsole(provider: AiProviderId): Promise<void>
     builtins[provider] ||
     findAiSite(provider)?.consoleUrl ||
     getSettings().aiEndpoints.find((item) => item.id === provider)?.consoleUrl
-  if (!url) throw new Error('No console URL for this provider.')
+  if (!url) throw new Error(mt('No console URL for this provider.'))
   await shell.openExternal(url)
 }
 
@@ -407,14 +408,14 @@ export async function resolveCreds(provider: AiProviderId): Promise<StoredAiCred
       try {
         creds = importLocal(provider)
       } catch {
-        throw new Error(`Connect ${providerLabel(provider)} in Spoon → Preferences → AI.`)
+        throw new Error(mt('x.connectProviderInSettings', { values: { label: providerLabel(provider) } }))
       }
     } else {
       const endpoint = getSettings().aiEndpoints.find((item) => item.id === provider) ?? findAiSite(provider)
       if (endpoint && !endpoint.needsKey) {
         return { provider, method: 'imported', label: endpoint.label }
       }
-      throw new Error(`Connect ${providerLabel(provider)} in Spoon → Preferences → AI.`)
+      throw new Error(mt('x.connectProviderInSettings', { values: { label: providerLabel(provider) } }))
     }
   }
   if (provider === 'grok') creds = await refreshGrok(creds)

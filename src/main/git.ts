@@ -35,6 +35,7 @@ import type {
 import { dayKeyFromUnix } from '../shared/activity'
 import { classifyMedia } from '../shared/media'
 import { layoutGraph } from './graph'
+import { mt } from './i18n'
 
 const IMAGE_EXT = new Set([
   '.png',
@@ -87,7 +88,7 @@ export async function findGit(): Promise<string> {
       /* try next */
     }
   }
-  throw new Error('Git was not found. Install Git for Windows and restart Spoon.')
+  throw new Error(mt('Git was not found. Install Git for Windows and restart Spoon.'))
 }
 
 function runGitRaw(
@@ -137,7 +138,7 @@ function runGitRaw(
     })
     child.on('close', (code) => {
       if (killer) clearTimeout(killer)
-      resolvePromise({ stdout, stderr: timedOut ? `${stderr}\ntimed out` : stderr, code: timedOut ? 124 : (code ?? 1) })
+      resolvePromise({ stdout, stderr: timedOut ? `${stderr}\n${mt('timed out')}` : stderr, code: timedOut ? 124 : (code ?? 1) })
     })
   })
 }
@@ -149,7 +150,7 @@ export async function git(
 ): Promise<GitResult> {
   const r = await runGitRaw(cwd, ['-c', 'core.quotepath=false', '-c', 'i18n.logoutputencoding=utf-8', ...args], opts)
   if (r.code !== 0 && !opts?.allowFail) {
-    const msg = (r.stderr || r.stdout || `git ${args.join(' ')} failed`).trim()
+    const msg = (r.stderr || r.stdout || mt('x.gitCommandFailed', { values: { command: `git ${args.join(' ')}` } })).trim()
     const err = new Error(msg)
     ;(err as Error & { result: GitResult }).result = r
     throw err
@@ -299,7 +300,7 @@ export async function initRepo(directory: string, initialCommit = false): Promis
     const readme = join(directory, 'README.md')
     if (!existsSync(readme)) writeFileSync(readme, `# ${basename(directory)}\n`, 'utf8')
     await git(directory, ['add', '-A'])
-    await git(directory, ['commit', '-m', 'Initial commit'], { allowFail: true })
+    await git(directory, ['commit', '-m', mt('Initial commit')], { allowFail: true })
   }
   return directory
 }
@@ -333,7 +334,7 @@ export async function cloneRepo(
     child.on('error', reject)
     child.on('close', (code) => resolvePromise({ stdout, stderr, code: code ?? 1 }))
   })
-  if (r.code !== 0) throw new Error((r.stderr || r.stdout).trim() || 'Clone failed')
+  if (r.code !== 0) throw new Error((r.stderr || r.stdout).trim() || mt('Clone failed'))
   return target
 }
 
@@ -785,7 +786,7 @@ export async function pullRemote(cwd: string, opts: PullOptions = {}): Promise<G
   let stashed = false
   if (opts.stash) {
     const before = await stashTop()
-    await git(cwd, ['stash', 'push', '-u', '-m', 'spoon: auto-stash before pull'], { allowFail: true })
+    await git(cwd, ['stash', 'push', '-u', '-m', mt('x.autoStashMessage')], { allowFail: true })
     stashed = (await stashTop()) !== before
   }
   const args = ['pull']
@@ -1171,7 +1172,7 @@ export function worktreeFile(cwd: string, file: string): string {
   const root = resolve(cwd)
   const abs = resolve(root, file)
   const rel = relative(root, abs)
-  if (rel.startsWith('..') || isAbsolute(rel)) throw new Error('That path is outside the repository.')
+  if (rel.startsWith('..') || isAbsolute(rel)) throw new Error(mt('That path is outside the repository.'))
   return abs
 }
 
@@ -1446,7 +1447,7 @@ export async function overview(path: string): Promise<RepoOverview> {
     conflicts: 0,
     checkedAt: Date.now()
   }
-  if (!base.exists) return { ...base, error: 'Folder not found' }
+  if (!base.exists) return { ...base, error: mt('Folder not found') }
   const statusArgs = (untracked: 'all' | 'normal') => [
     'status',
     '--porcelain=v2',
@@ -1459,7 +1460,7 @@ export async function overview(path: string): Promise<RepoOverview> {
   if (st.code === 124) st = await git(path, statusArgs('normal'), { allowFail: true, timeoutMs: 30000 })
   if (st.code !== 0) {
     const unsafe = isDubious(st.stderr)
-    return { ...base, unsafe, error: unsafe ? 'Git blocks this folder (dubious ownership)' : firstLine(st.stderr) || 'Not a Git repository' }
+    return { ...base, unsafe, error: unsafe ? mt('Git blocks this folder (dubious ownership)') : firstLine(st.stderr) || mt('Not a Git repository') }
   }
   const out = { ...base }
   for (const line of st.stdout.split('\n')) {
@@ -1530,9 +1531,9 @@ export async function health(path: string, deep = false): Promise<RepoHealth> {
     issues.push({
       id: 'missing',
       severity: 'error',
-      title: 'Folder not found',
-      detail: 'This repository was moved or deleted. Remove it from the list, or scan its new location.',
-      fix: { id: 'remove-missing', label: 'Remove from list' }
+      title: mt('Folder not found'),
+      detail: mt('This repository was moved or deleted. Remove it from the list, or scan its new location.'),
+      fix: { id: 'remove-missing', label: mt('Remove from list') }
     })
     return done()
   }
@@ -1542,17 +1543,17 @@ export async function health(path: string, deep = false): Promise<RepoHealth> {
       issues.push({
         id: 'unsafe',
         severity: 'error',
-        title: 'Git does not trust this folder',
-        detail: 'The folder belongs to another Windows user, so Git refuses to run here ("dubious ownership").',
-        fix: { id: 'safe-directory', label: 'Trust this folder' }
+        title: mt('Git does not trust this folder'),
+        detail: mt('The folder belongs to another Windows user, so Git refuses to run here ("dubious ownership").'),
+        fix: { id: 'safe-directory', label: mt('Trust this folder') }
       })
     } else {
       issues.push({
         id: 'not-repo',
         severity: 'error',
-        title: 'Not a Git repository anymore',
-        detail: firstLine(probe.stderr) || 'The .git folder is missing or unreadable.',
-        fix: { id: 'remove-missing', label: 'Remove from list' }
+        title: mt('Not a Git repository anymore'),
+        detail: firstLine(probe.stderr) || mt('The .git folder is missing or unreadable.'),
+        fix: { id: 'remove-missing', label: mt('Remove from list') }
       })
     }
     return done()
@@ -1565,9 +1566,9 @@ export async function health(path: string, deep = false): Promise<RepoHealth> {
     issues.push({
       id: 'lock',
       severity: 'error',
-      title: 'Stale lock file',
-      detail: `Git left index.lock behind ${ageMin} min ago, usually after a crash. Every command fails until it is removed.`,
-      fix: { id: 'remove-lock', label: 'Delete index.lock' }
+      title: mt('Stale lock file'),
+      detail: mt('x.staleLockDetail', { values: { minutes: ageMin } }),
+      fix: { id: 'remove-lock', label: mt('Delete index.lock') }
     })
   }
 
@@ -1585,11 +1586,11 @@ export async function health(path: string, deep = false): Promise<RepoHealth> {
     issues.push({
       id: 'operation',
       severity: 'warn',
-      title: `${op[0].toUpperCase()}${op.slice(1)} in progress`,
+      title: mt('x.operationInProgress', { values: { operation: op[0].toUpperCase() + op.slice(1) } }),
       detail: status.conflicted.length
-        ? `${status.conflicted.length} file(s) still have conflicts. Resolve them in Changes, or abort to go back to where you were.`
-        : 'Continue it from Changes, or abort to go back to where you were.',
-      fix: { id: 'abort-operation', label: `Abort ${op}`, destructive: true }
+        ? mt('x.operationConflictDetail', { values: { count: status.conflicted.length } })
+        : mt('Continue it from Changes, or abort to go back to where you were.'),
+      fix: { id: 'abort-operation', label: mt('x.abortOperation', { values: { operation: op } }), destructive: true }
     })
   }
 
@@ -1598,9 +1599,9 @@ export async function health(path: string, deep = false): Promise<RepoHealth> {
     issues.push({
       id: 'detached',
       severity: 'warn',
-      title: 'Detached HEAD',
-      detail: 'You are not on a branch. New commits here are easy to lose.',
-      fix: def ? { id: 'checkout-default', label: `Checkout ${def}` } : undefined
+      title: mt('Detached HEAD'),
+      detail: mt('You are not on a branch. New commits here are easy to lose.'),
+      fix: def ? { id: 'checkout-default', label: mt('x.checkoutDefault', { values: { branch: def } }) } : undefined
     })
   }
 
@@ -1609,8 +1610,8 @@ export async function health(path: string, deep = false): Promise<RepoHealth> {
     issues.push({
       id: 'no-remote',
       severity: 'info',
-      title: 'No remote',
-      detail: 'This repository only exists on this machine. Add a remote to back it up.'
+      title: mt('No remote'),
+      detail: mt('This repository only exists on this machine. Add a remote to back it up.')
     })
   } else if (!status.detached && !status.upstream) {
     const exists = await git(path, ['show-ref', '--verify', '--quiet', `refs/remotes/${remote}/${status.branch}`], {
@@ -1621,16 +1622,16 @@ export async function health(path: string, deep = false): Promise<RepoHealth> {
         ? {
             id: 'no-upstream',
             severity: 'warn',
-            title: 'Branch is not tracking its remote',
-            detail: `${remote}/${status.branch} exists, but ${status.branch} is not linked to it. Pull and push will not know where to go.`,
-            fix: { id: 'track-upstream', label: `Track ${remote}/${status.branch}` }
+            title: mt('Branch is not tracking its remote'),
+            detail: mt('x.branchNotTrackingDetail', { values: { remote, branch: status.branch } }),
+            fix: { id: 'track-upstream', label: mt('x.trackUpstream', { values: { remote, branch: status.branch } }) }
           }
         : {
             id: 'unpublished',
             severity: 'info',
-            title: 'Branch not published',
-            detail: `${status.branch} only exists locally.`,
-            fix: { id: 'publish-branch', label: `Publish to ${remote}` }
+            title: mt('Branch not published'),
+            detail: mt('x.branchNotPublishedDetail', { values: { branch: status.branch } }),
+            fix: { id: 'publish-branch', label: mt('x.publishToRemote', { values: { remote } }) }
           }
     )
   }
@@ -1640,16 +1641,16 @@ export async function health(path: string, deep = false): Promise<RepoHealth> {
     issues.push({
       id: 'diverged',
       severity: 'warn',
-      title: 'Branch has diverged',
-      detail: `${status.ahead} local and ${status.behind} remote commit(s) differ. Pull with merge or rebase to reconcile.`
+      title: mt('Branch has diverged'),
+      detail: mt('x.branchDivergedDetail', { values: { ahead: status.ahead, behind: status.behind } })
     })
   } else if (status.behind && !dirty && !op) {
     issues.push({
       id: 'behind',
       severity: 'info',
-      title: `${status.behind} commit(s) behind`,
-      detail: `${status.upstream} has new commits and your working tree is clean.`,
-      fix: { id: 'pull-ff', label: 'Fast-forward' }
+      title: mt('x.commitsBehindTitle', { count: status.behind }),
+      detail: mt('x.upstreamHasNewCommits', { values: { upstream: status.upstream ?? '' } }),
+      fix: { id: 'pull-ff', label: mt('Fast-forward') }
     })
   }
 
@@ -1657,9 +1658,9 @@ export async function health(path: string, deep = false): Promise<RepoHealth> {
     issues.push({
       id: 'gone',
       severity: 'info',
-      title: `${gone.length} branch(es) deleted on the remote`,
-      detail: `${gone.slice(0, 6).join(', ')}${gone.length > 6 ? '…' : ''} track remote branches that no longer exist.`,
-      fix: { id: 'delete-gone-branches', label: 'Delete local copies', destructive: true }
+      title: mt('x.branchesDeletedOnRemote', { count: gone.length }),
+      detail: mt('x.branchesDeletedOnRemoteDetail', { values: { branches: gone.slice(0, 6).join(', ') + (gone.length > 6 ? '…' : '') } }),
+      fix: { id: 'delete-gone-branches', label: mt('Delete local copies'), destructive: true }
     })
   }
 
@@ -1667,9 +1668,9 @@ export async function health(path: string, deep = false): Promise<RepoHealth> {
     issues.push({
       id: 'identity',
       severity: 'warn',
-      title: 'Commit identity missing',
-      detail: 'user.name or user.email is not set, so commits will fail or use a placeholder.',
-      fix: { id: 'set-identity', label: 'Set name and email' }
+      title: mt('Commit identity missing'),
+      detail: mt('user.name or user.email is not set, so commits will fail or use a placeholder.'),
+      fix: { id: 'set-identity', label: mt('Set name and email') }
     })
   }
 
@@ -1678,9 +1679,9 @@ export async function health(path: string, deep = false): Promise<RepoHealth> {
     issues.push({
       id: 'submodules',
       severity: 'warn',
-      title: `${uninit.length} submodule(s) not initialized`,
-      detail: `${uninit.map((s) => s.path).slice(0, 4).join(', ')} are empty folders until they are checked out.`,
-      fix: { id: 'submodules', label: 'Initialize submodules' }
+      title: mt('x.submodulesNotInitialized', { count: uninit.length }),
+      detail: mt('x.submodulesNotInitializedDetail', { values: { paths: uninit.map((s) => s.path).slice(0, 4).join(', ') } }),
+      fix: { id: 'submodules', label: mt('Initialize submodules') }
     })
   }
 
@@ -1690,9 +1691,11 @@ export async function health(path: string, deep = false): Promise<RepoHealth> {
     issues.push({
       id: 'gc',
       severity: 'info',
-      title: 'Repository can be compacted',
-      detail: `${count.toLocaleString()} loose objects${garbage ? ' and leftover garbage' : ''}. Packing them makes Git faster.`,
-      fix: { id: 'gc', label: 'Compact (git gc)' }
+      title: mt('Repository can be compacted'),
+      detail: garbage
+        ? mt('x.looseObjectsWithGarbageDetail', { values: { count: count.toLocaleString() } })
+        : mt('x.looseObjectsDetail', { values: { count: count.toLocaleString() } }),
+      fix: { id: 'gc', label: mt('Compact (git gc)') }
     })
   }
 
@@ -1702,9 +1705,9 @@ export async function health(path: string, deep = false): Promise<RepoHealth> {
       issues.push({
         id: 'fsck',
         severity: 'error',
-        title: 'Repository data is damaged',
-        detail: `${firstLine(fsck.stderr || fsck.stdout)}. Fetch from the remote may restore missing objects; otherwise re-clone.`,
-        fix: remote ? { id: 'prune', label: 'Fetch and prune' } : undefined
+        title: mt('Repository data is damaged'),
+        detail: mt('x.repositoryDamagedDetail', { values: { message: firstLine(fsck.stderr || fsck.stdout) } }),
+        fix: remote ? { id: 'prune', label: mt('Fetch and prune') } : undefined
       })
     }
   }
@@ -1719,63 +1722,63 @@ export async function applyFix(path: string, fix: RepoFixId, input?: { name?: st
   switch (fix) {
     case 'safe-directory': {
       const r = await runGitRaw(undefined, ['config', '--global', '--add', 'safe.directory', path.replace(/\\/g, '/')])
-      if (r.code !== 0) throw new Error(firstLine(r.stderr) || 'Could not update safe.directory')
-      return 'Folder trusted'
+      if (r.code !== 0) throw new Error(firstLine(r.stderr) || mt('Could not update safe.directory'))
+      return mt('Folder trusted')
     }
     case 'remove-lock': {
       const lock = join(await gitDirOf(path), 'index.lock')
       if (existsSync(lock)) unlinkSync(lock)
-      return 'Lock removed'
+      return mt('Lock removed')
     }
     case 'abort-operation': {
       const op = operationIn(await gitDirOf(path))
-      if (!op || op === 'bisect') return 'Nothing to abort'
+      if (!op || op === 'bisect') return mt('Nothing to abort')
       await git(path, [op, '--abort'])
-      return `${op} aborted`
+      return mt('x.operationAborted', { values: { operation: op } })
     }
     case 'publish-branch': {
       const remote = await remotes()
-      if (!remote) throw new Error('No remote to publish to')
+      if (!remote) throw new Error(mt('No remote to publish to'))
       await git(path, ['push', '-u', remote, 'HEAD'])
-      return `Published to ${remote}`
+      return mt('x.publishedToRemote', { values: { remote } })
     }
     case 'track-upstream': {
       const remote = await remotes()
       const branch = (await git(path, ['rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim()
       await git(path, ['branch', `--set-upstream-to=${remote}/${branch}`])
-      return `Tracking ${remote}/${branch}`
+      return mt('x.trackingRemoteBranch', { values: { remote: remote ?? '', branch } })
     }
     case 'pull-ff':
       await git(path, ['pull', '--ff-only'])
-      return 'Up to date'
+      return mt('Up to date')
     case 'prune':
       await git(path, ['fetch', '--all', '--prune'])
-      return 'Fetched and pruned'
+      return mt('Fetched and pruned')
     case 'gc':
       await git(path, ['gc', '--prune=now', '--quiet'])
-      return 'Repository compacted'
+      return mt('Repository compacted')
     case 'submodules':
       await submoduleUpdate(path)
-      return 'Submodules initialized'
+      return mt('Submodules initialized')
     case 'delete-gone-branches': {
       const gone = await goneBranches(path)
       for (const name of gone) await git(path, ['branch', '-D', name])
-      return `Deleted ${gone.length} branch(es)`
+      return mt('x.deletedBranches', { count: gone.length })
     }
     case 'checkout-default': {
       const def = await defaultBranch(path)
-      if (!def) throw new Error('No default branch found')
+      if (!def) throw new Error(mt('No default branch found'))
       await git(path, ['checkout', def])
-      return `On ${def}`
+      return mt('x.onBranch', { values: { branch: def } })
     }
     case 'set-identity': {
-      if (!input?.name?.trim() || !input?.email?.trim()) throw new Error('Name and email are required')
+      if (!input?.name?.trim() || !input?.email?.trim()) throw new Error(mt('Name and email are required'))
       await runGitRaw(undefined, ['config', '--global', 'user.name', input.name.trim()])
       await runGitRaw(undefined, ['config', '--global', 'user.email', input.email.trim()])
-      return 'Identity saved'
+      return mt('Identity saved')
     }
     case 'remove-missing':
-      return 'Removed'
+      return mt('Removed')
   }
 }
 

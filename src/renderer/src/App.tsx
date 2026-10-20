@@ -1,4 +1,6 @@
 import { Button } from './Button'
+import { t, useT } from './i18n'
+import { LanguagePicker } from './LanguagePicker'
 import { Fragment, memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { FileCode2, FolderOpen, Copy, History, ScanLine, Plus, Undo2, Trash2, Pencil } from 'lucide-react'
@@ -184,10 +186,10 @@ type Overlay =
   | { type: 'reflog' }
 
 async function pushHead(path: string, snap?: Snapshot) {
-  if (!snap) throw new Error('Repository is still loading.')
-  if (snap.status.detached) throw new Error('Detached HEAD. Checkout a branch before pushing.')
+  if (!snap) throw new Error(t('Repository is still loading.'))
+  if (snap.status.detached) throw new Error(t('Detached HEAD. Checkout a branch before pushing.'))
   const remote = snap.status.upstream?.split('/')[0] || snap.remotes[0]?.name
-  if (!remote) throw new Error('This repository has no remote.')
+  if (!remote) throw new Error(t('This repository has no remote.'))
   await window.spoon.git.push(path, {
     remote,
     branch: snap.status.branch,
@@ -212,6 +214,7 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T, index: nu
 }
 
 export function App() {
+  const t = useT()
   const [tabs, setTabs] = useState<Tab[]>([{ id: 'mgr', kind: 'manager', name: 'New Tab' }])
   const [activeId, setActiveId] = useState('mgr')
   const [settings, setSettings] = useState<Settings | null>(null)
@@ -249,7 +252,7 @@ export function App() {
   const [tour, setTour] = useState(false)
   const [update, setUpdate] = useState<UpdateState>({ status: 'idle' })
   const [confettiAt, setConfettiAt] = useState(0)
-  const active = tabs.find((t) => t.id === activeId) || tabs[0]
+  const active = tabs.find((tab) => tab.id === activeId) || tabs[0]
   const tabsRef = useRef(tabs)
   tabsRef.current = tabs
   const activeIdRef = useRef(activeId)
@@ -366,14 +369,14 @@ export function App() {
       const snap = (await window.spoon.git.open(path)) as Snapshot
       setSnaps((m) => ({ ...m, [path]: snap }))
       setTabs((ts) => {
-        const existing = ts.find((t) => t.path === path)
+        const existing = ts.find((tab) => tab.path === path)
         if (existing) {
           setActiveId(existing.id)
           return ts
         }
         const id = `r-${Date.now()}`
         setActiveId(id)
-        const next = ts.filter((t) => !(t.kind === 'manager' && ts.length === 1))
+        const next = ts.filter((tab) => !(tab.kind === 'manager' && ts.length === 1))
         return [...next, { id, kind: 'repo', path, name: name || snap.status.name }]
       })
       setRecent(await window.spoon.app.recent())
@@ -604,13 +607,13 @@ export function App() {
         if (a === 'health') setOverlay({ type: 'health' })
         if (a === 'check-updates') void window.spoon.app.checkUpdate().then((s) => setUpdate(s as UpdateState))
         if (a === 'scan') {
-          const mgr = tabsRef.current.find((t) => t.kind === 'manager')
+          const mgr = tabsRef.current.find((tab) => tab.kind === 'manager')
           if (mgr) setActiveId(mgr.id)
           else openManager()
           setTimeout(() => document.dispatchEvent(new CustomEvent('spoon-scan')), 50)
         }
         if (a === 'home') {
-          const mgr = tabsRef.current.find((t) => t.kind === 'manager')
+          const mgr = tabsRef.current.find((tab) => tab.kind === 'manager')
           if (mgr) setActiveId(mgr.id)
           else openManager()
         }
@@ -653,14 +656,14 @@ export function App() {
   }, [active.path, loadRepo, reload, reloadSoon])
 
   function goHome() {
-    const mgr = tabs.find((t) => t.kind === 'manager')
+    const mgr = tabs.find((tab) => tab.kind === 'manager')
     if (mgr) setActiveId(mgr.id)
     else openManager()
   }
 
   function openManager() {
     const id = `m-${Date.now()}`
-    setTabs((t) => [...t, { id, kind: 'manager', name: 'New Tab' }])
+    setTabs((ts) => [...ts, { id, kind: 'manager', name: 'New Tab' }])
     setActiveId(id)
   }
 
@@ -746,7 +749,7 @@ export function App() {
     const unique = [...new Set(paths)]
     if (!unique.length) return
     const color = opts?.color || workspaceColor(workspaces.length + drafts.length)
-    const name = (opts?.name || `Workspace ${workspaces.length + drafts.length + 1}`).trim()
+    const name = (opts?.name || t('x.workspaceNumbered', { count: workspaces.length + drafts.length + 1 })).trim()
     try {
       const result = (await window.spoon.app.saveWorkspace({
         id: opts?.id,
@@ -798,7 +801,7 @@ export function App() {
       {
         id: ws?.id,
         color,
-        name: ws?.name || `Workspace ${workspaces.length + 1}`,
+        name: ws?.name || t('x.workspaceNumbered', { count: workspaces.length + 1 }),
         retagFrom: existingId,
         open: false
       }
@@ -920,43 +923,43 @@ export function App() {
     >
       <div className="toolbar">
         <div className="tb-group" data-tour="sync">
-          <Button className="tb-btn brand" data-ico="brand" title="About Spoon" aria-label="About Spoon" onClick={() => setOverlay({ type: 'about' })}>
+          <Button className="tb-btn brand" data-ico="brand" title={t('About Spoon')} aria-label={t('About Spoon')} onClick={() => setOverlay({ type: 'about' })}>
             <IcoSpoon />
             <span>Spoon</span>
           </Button>
-          <Button className="tb-btn" data-ico="launch" title="Quick Launch (Ctrl+P)" onClick={() => setQuick(true)}>
+          <Button className="tb-btn" data-ico="launch" title={t('Quick Launch (Ctrl+P)')} onClick={() => setQuick(true)}>
             <IcoLaunch />
-            <span>Quick Launch</span>
+            <span>{t('Quick Launch')}</span>
           </Button>
-          <Button className="tb-btn" data-ico="workspaces" title="Manage workspaces" onClick={() => setManageWs(true)}>
+          <Button className="tb-btn" data-ico="workspaces" title={t('Manage workspaces')} onClick={() => setManageWs(true)}>
             <IcoWorkspaces />
-            <span>Workspaces</span>
+            <span>{t('Workspaces')}</span>
           </Button>
-          <Button className="tb-btn" data-ico="fetch" title="Fetch remote changes" disabled={!active.path} onClick={() => void runRemote('fetch')}>
+          <Button className="tb-btn" data-ico="fetch" title={t('Fetch remote changes')} disabled={!active.path} onClick={() => void runRemote('fetch')}>
             <IcoFetch />
-            <span>Fetch{snap?.status.behind ? '*' : ''}</span>
+            <span>{t('Fetch')}{snap?.status.behind ? '*' : ''}</span>
           </Button>
-          <Button className="tb-btn" data-ico="pull" title="Pull remote changes into this branch" disabled={!active.path} onClick={() => void runRemote('pull')}>
+          <Button className="tb-btn" data-ico="pull" title={t('Pull remote changes into this branch')} disabled={!active.path} onClick={() => void runRemote('pull')}>
             <IcoPull />
-            <span>Pull{snap?.status.behind ? ` ${snap.status.behind}` : ''}</span>
+            <span>{t('Pull')}{snap?.status.behind ? ` ${snap.status.behind}` : ''}</span>
           </Button>
-          <Button className="tb-btn" data-ico="push" title="Push this branch to its remote" disabled={!active.path} onClick={() => void runRemote('push')}>
+          <Button className="tb-btn" data-ico="push" title={t('Push this branch to its remote')} disabled={!active.path} onClick={() => void runRemote('push')}>
             <IcoPush />
-            <span>Push{snap?.status.ahead ? ` ${snap.status.ahead}` : ''}</span>
+            <span>{t('Push')}{snap?.status.ahead ? ` ${snap.status.ahead}` : ''}</span>
           </Button>
-          <Button className="tb-btn" data-ico="refresh" disabled={!active.path} onClick={() => void reload(active.path)} title="Refresh this repository">
+          <Button className="tb-btn" data-ico="refresh" disabled={!active.path} onClick={() => void reload(active.path)} title={t('Refresh this repository')}>
             <IcoRefresh />
-            <span>Refresh</span>
+            <span>{t('Refresh')}</span>
           </Button>
           <Button className="tb-btn" data-ico="stash" disabled={!active.path} onClick={() => setOverlay({ type: 'stash' })}>
             <IcoStash />
-            <span>Stash</span>
+            <span>{t('Stash')}</span>
           </Button>
         </div>
         <div className="tb-group center">
           <div className="branch-chip">
             <div className="repo">
-              {active.kind === 'repo' ? active.name : 'Your code. In flow.'}
+              {active.kind === 'repo' ? active.name : t('x.yourCodeInFlow')}
               {activeGroup ? (
                 <span className="ws-pill" style={{ ['--group' as string]: activeGroup.color }}>
                   {activeGroup.name}
@@ -966,10 +969,10 @@ export function App() {
             <div className="br">
               {active.kind === 'repo' ? (
                 <>
-                  <IcoBranch /> {snap?.status.detached ? 'detached HEAD' : snap?.status.branch || '...'}
+                  <IcoBranch /> {snap?.status.detached ? t('x.detachedHead') : snap?.status.branch || '...'}
                 </>
               ) : (
-                'Open a repository to start'
+                t('x.openRepoToStart')
               )}
             </div>
           </div>
@@ -977,13 +980,13 @@ export function App() {
         <div className="tb-group right">
           <Button className="tb-btn" data-ico="branch" disabled={!active.path} onClick={() => setOverlay({ type: 'branch' })}>
             <IcoBranch />
-            <span>New Branch</span>
+            <span>{t('New Branch')}</span>
           </Button>
           <Button
             className="tb-btn"
             data-ico="terminal"
             disabled={!active.path}
-            title="Open with default IDE, agent, or CLI"
+            title={t('Open with default IDE, agent, or CLI')}
             onClick={() => {
               if (!active.path) return
               void window.spoon.app.openWith(active.path)
@@ -999,29 +1002,29 @@ export function App() {
             }}
           >
             <IcoOpen />
-            <span>Open with</span>
+            <span>{t('Open with')}</span>
           </Button>
           <Button className="tb-btn" data-ico="health" disabled={!active.path} onClick={() => setOverlay({ type: 'health' })}>
             <IcoHealth />
-            <span>Health</span>
+            <span>{t('Health')}</span>
           </Button>
           <Button className="tb-btn" data-ico="activity" onClick={() => setActivityOpen((v) => !v)}>
             <IcoConsole />
-            <span>Console</span>
+            <span>{t('Console')}</span>
           </Button>
           <Button className="tb-btn" data-ico="home" data-tour="home" onClick={goHome}>
             <IcoHome />
-            <span>Home</span>
+            <span>{t('Home')}</span>
           </Button>
           <Button
             className="tb-btn"
             data-ico="settings"
             data-tour="prefs"
-            title="Appearance, AI, and Help"
+            title={t('Appearance, AI, and Help')}
             onClick={() => setOverlay({ type: 'settings' })}
           >
             <IcoSettings />
-            <span>Settings</span>
+            <span>{t('Settings')}</span>
           </Button>
           <div className="caption-gap" />
         </div>
@@ -1046,7 +1049,7 @@ export function App() {
           ))
           if (!grouped) return <Fragment key={head.id}>{chips}</Fragment>
           const groupKey = head.workspaceId || `color-${head.color}`
-          const groupTitle = ws?.name || 'Grouped by color'
+          const groupTitle = ws?.name || t('x.groupedByColor')
           const collapsed = !!collapsedGroups[groupKey]
           const hasActive = run.some((tab) => tab.id === activeId)
           return (
@@ -1058,7 +1061,7 @@ export function App() {
               <Button
                 type="button"
                 className="tab-group-label"
-                title={collapsed ? `Expand “${groupTitle}”` : `Collapse “${groupTitle}”`}
+                title={collapsed ? t('x.expandGroup', { values: { name: groupTitle } }) : t('x.collapseGroup', { values: { name: groupTitle } })}
                 aria-expanded={!collapsed}
                 aria-label={groupTitle}
                 onClick={() =>
@@ -1078,15 +1081,15 @@ export function App() {
                 }}
               >
                 <i />
-                <span className="tab-group-name">{ws?.name || 'Group'}</span>
+                <span className="tab-group-name">{ws?.name || t('Group')}</span>
                 {collapsed ? <span className="tab-group-count">{run.length}</span> : null}
               </Button>
-              <Button className="tab-group-edit" variant="icon" title={`Edit workspace “${groupTitle}”`} aria-label={`Edit workspace ${groupTitle}`} onClick={() => setEditingWorkspace(ws ?? { id: groupKey, name: groupTitle === 'Grouped by color' ? 'Workspace' : groupTitle, color: color || workspaceColor(0), repos: run.filter((tab) => tab.path).map((tab) => tab.path!) })}><Pencil size={14} /></Button>
+              <Button className="tab-group-edit" variant="icon" title={t('x.editWorkspaceNamed', { values: { name: groupTitle } })} aria-label={t('x.editWorkspaceNamed', { values: { name: groupTitle } })} onClick={() => setEditingWorkspace(ws ?? { id: groupKey, name: groupTitle === t('x.groupedByColor') ? t('Workspace') : groupTitle, color: color || workspaceColor(0), repos: run.filter((tab) => tab.path).map((tab) => tab.path!) })}><Pencil size={14} /></Button>
               {!collapsed ? chips : null}
             </div>
           )
         })}
-        <Button className="tab-add" onClick={openManager} aria-label="New tab">
+        <Button className="tab-add" onClick={openManager} aria-label={t('x.newTabButtonLabel')}>
           +
         </Button>
       </div>
@@ -1141,7 +1144,7 @@ export function App() {
             onBusy={setBusy}
           />
         ) : (
-          <div className="empty loading">Loading repository...</div>
+          <div className="empty loading">{t('Loading repository...')}</div>
         )}
       </div>
 
@@ -1205,14 +1208,14 @@ export function App() {
           onEdit={() => {
             const paths = tabsRef.current.filter((tab) => groupMenu.tabIds.includes(tab.id) && tab.path).map((tab) => tab.path!)
             const saved = groupMenu.workspaceId ? groupById.get(groupMenu.workspaceId) : undefined
-            setEditingWorkspace(saved ?? { id: groupMenu.key, name: groupMenu.name || 'Workspace', color: tabsRef.current.find((tab) => groupMenu.tabIds.includes(tab.id))?.color || workspaceColor(0), repos: paths })
+            setEditingWorkspace(saved ?? { id: groupMenu.key, name: groupMenu.name || t('Workspace'), color: tabsRef.current.find((tab) => groupMenu.tabIds.includes(tab.id))?.color || workspaceColor(0), repos: paths })
             setGroupMenu(null)
           }}
           onSave={() => {
             const paths = tabsRef.current.filter((tab) => groupMenu.tabIds.includes(tab.id) && tab.path).map((tab) => tab.path!)
             const saved = groupMenu.workspaceId ? groupById.get(groupMenu.workspaceId) : undefined
             if (saved && !saved.id.startsWith('draft-')) void updateWorkspace(saved, { repos: paths }).catch(() => {})
-            else setEditingWorkspace(saved ?? { id: groupMenu.key, name: groupMenu.name || 'Workspace', color: tabsRef.current.find((tab) => groupMenu.tabIds.includes(tab.id))?.color || workspaceColor(0), repos: paths })
+            else setEditingWorkspace(saved ?? { id: groupMenu.key, name: groupMenu.name || t('Workspace'), color: tabsRef.current.find((tab) => groupMenu.tabIds.includes(tab.id))?.color || workspaceColor(0), repos: paths })
             setGroupMenu(null)
           }}
           onClose={() => setGroupMenu(null)}
@@ -1268,13 +1271,13 @@ export function App() {
       {activityOpen && (
         <div className="activity">
           <h3>
-            Activity <Button className="ghost" onClick={() => setActivityOpen(false)}>Close</Button>
+            {t('Activity')} <Button className="ghost" onClick={() => setActivityOpen(false)}>{t('Close')}</Button>
           </h3>
           <pre>
             {activity
               .slice(0, 12)
               .map((a) => `[${a.status}] ${a.title}\n${a.command ?? ''}\n${a.output ?? ''}`)
-              .join('\n\n') || 'No activity yet.'}
+              .join('\n\n') || t('No activity yet.')}
           </pre>
         </div>
       )}
@@ -1318,6 +1321,7 @@ function UpdateBar({
   onInstall: () => void
   onDismiss: () => void
 }) {
+  const t = useT()
   if (state.status === 'idle' || state.status === 'disabled' || state.status === 'none' || state.status === 'checking') {
     return null
   }
@@ -1326,26 +1330,26 @@ function UpdateBar({
   }
   return (
     <div className={`update-bar ${state.status}`}>
-      {state.status === 'available' && <span>Spoon {state.version} is available. Downloading...</span>}
-      {state.status === 'downloading' && <span>Downloading Spoon {state.version}... {state.percent ?? 0}%</span>}
+      {state.status === 'available' && <span>{t('x.updateAvailableDownloading', { values: { version: state.version ?? '' } })}</span>}
+      {state.status === 'downloading' && <span>{t('x.downloadingPercent', { values: { version: state.version ?? '', percent: state.percent ?? 0 } })}</span>}
       {state.status === 'ready' && (
         <>
-          <span>Spoon {state.version} is ready. Restart to install.</span>
+          <span>{t('x.updateReadyRestart', { values: { version: state.version ?? '' } })}</span>
           <Button className="primary" onClick={onInstall}>
-            Restart and install
+            {t('Restart and install')}
           </Button>
         </>
       )}
       {state.status === 'error' && (
         <>
-          <span>Update failed{state.error ? `: ${state.error}` : ''}</span>
+          <span>{state.error ? t('x.updateFailed', { values: { error: state.error } }) : t('Update failed')}</span>
           <Button className="ghost" onClick={onCheck}>
-            Retry
+            {t('Retry')}
           </Button>
         </>
       )}
       <Button className="ghost" onClick={onDismiss}>
-        Dismiss
+        {t('Dismiss')}
       </Button>
     </div>
   )
@@ -1490,6 +1494,7 @@ function ModelMenu({
   onChange: (id: string) => void
   onNeedSetup?: () => void
 }) {
+  const t = useT()
   const btnRef = useRef<HTMLButtonElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const listId = useId()
@@ -1519,8 +1524,8 @@ function ModelMenu({
     setHi(value)
     setQ('')
     const onDoc = (e: PointerEvent) => {
-      const t = e.target as Node
-      if (btnRef.current?.contains(t) || listRef.current?.contains(t)) return
+      const target = e.target as Node
+      if (btnRef.current?.contains(target) || listRef.current?.contains(target)) return
       setOpen(false)
     }
     const onKey = (e: KeyboardEvent) => {
@@ -1556,8 +1561,8 @@ function ModelMenu({
         ref={btnRef}
         type="button"
         className="menu-select-btn model-select"
-        title="AI model"
-        aria-label="AI model"
+        title={t('x.modelMenu')}
+        aria-label={t('x.modelMenu')}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listId}
@@ -1600,8 +1605,8 @@ function ModelMenu({
               <input
                 className="model-filter"
                 value={q}
-                placeholder="Filter models"
-                aria-label="Filter models"
+                placeholder={t('x.searchModels')}
+                aria-label={t('x.searchModels')}
                 autoFocus
                 onChange={(e) => setQ(e.target.value)}
                 onKeyDown={(e) => {
@@ -1616,7 +1621,7 @@ function ModelMenu({
                 }}
               />
             )}
-            <ul role="listbox" aria-label="AI models">
+            <ul role="listbox" aria-label={t('x.aiModels')}>
               {filtered.map((item) => (
                 <li key={item.id} role="presentation">
                   <Button
@@ -1631,7 +1636,7 @@ function ModelMenu({
                   </Button>
                 </li>
               ))}
-              {!filtered.length && <li className="menu-select-empty">No models match</li>}
+              {!filtered.length && <li className="menu-select-empty">{t('x.noModelsMatch')}</li>}
             </ul>
           </div>,
           document.body
@@ -1669,6 +1674,7 @@ function Workspace({
   onOverlay: (o: Overlay) => void
   onBusy: (b: boolean) => void
 }) {
+  const t = useT()
   const [sel, setSel] = useState<SideSel>({ kind: 'all' })
   const [commit, setCommit] = useState<CommitInfo | null>(snap.commits[0] ?? null)
   const [detailTab, setDetailTab] = useState<'commit' | 'changes' | 'tree'>('commit')
@@ -1776,7 +1782,7 @@ function Workspace({
     return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
   }, [shownUnstaged, snap.status.staged])
   const activeTypes = useMemo(
-    () => typeFilter.filter((type) => changeTypes.some(([t]) => t === type)),
+    () => typeFilter.filter((type) => changeTypes.some(([entryType]) => entryType === type)),
     [typeFilter, changeTypes]
   )
   const visibleUnstaged = useMemo(
@@ -1807,7 +1813,7 @@ function Workspace({
       void window.spoon.git.diff(path, { commit: commit.hash }).then((d) => { if (current) setCommitDiffs(d as FileDiff[]) }).catch((reason) => { if (current) void window.spoon.app.error(String(reason)) })
     }
     if ((detailTab === 'tree' || historyLayout === 'columns') && commit) {
-      void window.spoon.git.tree(path, commit.hash).then((t) => { if (current) setTree(t as FileTreeNode[]) }).catch((reason) => { if (current) void window.spoon.app.error(String(reason)) })
+      void window.spoon.git.tree(path, commit.hash).then((nodes) => { if (current) setTree(nodes as FileTreeNode[]) }).catch((reason) => { if (current) void window.spoon.app.error(String(reason)) })
     }
     return () => { current = false }
   }, [detailTab, commit, path, historyLayout])
@@ -1825,7 +1831,7 @@ function Workspace({
     setCommitBusy(true)
     onBusy(true)
     await catchErr(async () => {
-      await window.spoon.git.commit(path, { message: msg.trim() || snap.commits[0]?.subject || 'Update', amend })
+      await window.spoon.git.commit(path, { message: msg.trim() || snap.commits[0]?.subject || t('x.commitSubjectFallback'), amend })
       if (pushAfter) {
         await pushHead(path, snap)
         document.dispatchEvent(new CustomEvent('spoon-confetti'))
@@ -1856,11 +1862,11 @@ function Workspace({
       return
     }
     setAiBusy(true)
-    setAiBusyText('Writing...')
+    setAiBusyText(t('Writing...'))
     await catchErr(async () => {
       if (andGo !== 'fill' && !snap.status.stagedCount) {
         if (settings?.aiStageAll === false) {
-          await window.spoon.app.error('Stage changes first, or enable “Stage all when empty” in Settings → AI.')
+          await window.spoon.app.error(t('Stage changes first, or enable “Stage all when empty” in Settings → AI.'))
           return
         }
         await window.spoon.git.stageAll(path)
@@ -1889,29 +1895,29 @@ function Workspace({
   async function aiSplitCommit(pushAfter: boolean) {
     if (committingRef.current) return
     if (snap.status.merging || snap.status.rebasing || snap.status.cherryPicking) {
-      await window.spoon.app.error('Finish the merge, rebase, or cherry-pick before creating commits.')
+      await window.spoon.app.error(t('Finish the merge, rebase, or cherry-pick before creating commits.'))
       return
     }
     const staged = snap.status.stagedCount
     const dirty = staged + snap.status.unstagedCount
     if (!dirty) {
-      await window.spoon.app.error('Nothing to commit.')
+      await window.spoon.app.error(t('Nothing to commit.'))
       return
     }
     if (!staged && settings?.aiStageAll === false) {
-      await window.spoon.app.error('Stage changes first, or enable “Stage all when empty” in Settings → AI.')
+      await window.spoon.app.error(t('Stage changes first, or enable “Stage all when empty” in Settings → AI.'))
       return
     }
     committingRef.current = true
     setAiBusy(true)
-    setAiBusyText('Analyzing...')
+    setAiBusyText(t('Analyzing...'))
     onBusy(true)
     let made = 0
     await catchErr(async () => {
       const result = (await window.spoon.ai.analyze(path, provider, model, staged ? 'staged' : 'all')) as ChangeAnalysis
       const chosen = result.commits.filter((item) => item.subject.trim() && item.files.length)
-      if (!chosen.length) throw new Error('The analysis did not name any commits.')
-      setAiBusyText(chosen.length > 1 ? `Committing ${chosen.length}...` : 'Committing...')
+      if (!chosen.length) throw new Error(t('The analysis did not name any commits.'))
+      setAiBusyText(chosen.length > 1 ? t('x.committingCount', { count: chosen.length }) : t('Committing...'))
       await window.spoon.git.unstageAll(path)
       for (const item of chosen) {
         await window.spoon.git.stage(path, item.files)
@@ -1962,12 +1968,12 @@ function Workspace({
     const chosen = drafts.filter((item) => item.include && item.subject.trim() && item.files.length)
     if (!chosen.length) return
     if (snap.status.merging || snap.status.rebasing || snap.status.cherryPicking) {
-      await window.spoon.app.error('Finish the merge, rebase, or cherry-pick before creating commits.')
+      await window.spoon.app.error(t('Finish the merge, rebase, or cherry-pick before creating commits.'))
       return
     }
     const ok = await window.spoon.app.confirm(
-      `Create ${chosen.length} local commit${chosen.length === 1 ? '' : 's'}?`,
-      `${chosen.map((item) => item.subject).join('\n')}\n\nNothing is pushed. Each commit includes the whole file, in an order that keeps the previous commit valid.`
+      t('x.createLocalCommits', { count: chosen.length }),
+      t('x.createLocalCommitsDetail', { values: { subjects: chosen.map((item) => item.subject).join('\n') } })
     )
     if (!ok) return
     onBusy(true)
@@ -2045,14 +2051,14 @@ function Workspace({
   function branchCtx(b: BranchInfo) {
     openMenu(
       [
-        { id: 'new', label: 'New branch...' },
+        { id: 'new', label: t('New branch...') },
         { type: 'separator' },
-        { id: `co:${b.name}`, label: 'Checkout' },
-        { id: `merge:${b.name}`, label: 'Merge into current' },
-        { id: `rebase:${b.name}`, label: 'Rebase current onto...' },
+        { id: `co:${b.name}`, label: t('Checkout') },
+        { id: `merge:${b.name}`, label: t('Merge into current') },
+        { id: `rebase:${b.name}`, label: t('Rebase current onto...') },
         { type: 'separator' },
-        { id: `ren:${b.name}`, label: 'Rename...' },
-        { id: `del:${b.name}`, label: 'Delete...' }
+        { id: `ren:${b.name}`, label: t('Rename...') },
+        { id: `del:${b.name}`, label: t('Delete...') }
       ],
       (s) => {
         void catchErr(async () => {
@@ -2062,7 +2068,7 @@ function Workspace({
           if (s.startsWith('rebase:')) onOverlay({ type: 'rebase', ref: s.slice(7) })
           if (s.startsWith('ren:')) onOverlay({ type: 'rename', from: s.slice(4) })
           if (s.startsWith('del:')) {
-            const ok = await window.spoon.app.confirm(`Delete branch ${s.slice(4)}?`)
+            const ok = await window.spoon.app.confirm(t('x.deleteBranchPrompt', { values: { name: s.slice(4) } }))
             if (ok) await window.spoon.git.deleteBranch(path, s.slice(4), true)
           }
           onReload()
@@ -2075,12 +2081,12 @@ function Workspace({
     const url = snap.remotes.find((r) => r.name === name)?.url ?? ''
     openMenu(
       [
-        { id: 'add', label: 'Add remote...' },
-        { id: 'edit', label: 'Edit URL...' },
-        { id: 'rename', label: 'Rename...' },
-        { id: 'fetch', label: 'Fetch' },
+        { id: 'add', label: t('Add remote...') },
+        { id: 'edit', label: t('Edit URL...') },
+        { id: 'rename', label: t('Rename...') },
+        { id: 'fetch', label: t('Fetch') },
         { type: 'separator' },
-        { id: 'remove', label: 'Remove remote...' }
+        { id: 'remove', label: t('Remove remote...') }
       ],
       (s) => {
         void catchErr(async () => {
@@ -2089,7 +2095,7 @@ function Workspace({
           if (s === 'rename') onOverlay({ type: 'remote-rename', from: name })
           if (s === 'fetch') await window.spoon.git.fetch(path, { remote: name, prune: true })
           if (s === 'remove') {
-            const ok = await window.spoon.app.confirm(`Remove remote ${name}?`)
+            const ok = await window.spoon.app.confirm(t('x.removeRemotePrompt', { values: { name } }))
             if (ok) await window.spoon.git.removeRemote(path, name)
           }
           onReload()
@@ -2142,20 +2148,20 @@ function Workspace({
     }
     const box = event.currentTarget.getBoundingClientRect()
     const menu: ContextState = { x: event.clientX || box.left + 20, y: event.clientY || box.bottom, title: `${entry.path}${exactLine ? `:${exactLine}` : ''}`, items: [
-      { label: exactLine ? `Open in editor · line ${exactLine}` : 'Open in editor at change', icon: <FileCode2 />, disabled: deleted, run: run(() => openAt()) },
-      ...(fileEditors.length > 1 ? fileEditors.map((editor) => ({ label: `Open with ${editor.label}`, icon: <FileCode2 />, disabled: deleted, run: run(() => openAt(editor.id)) })) : []),
-      { label: 'Show in Windows Explorer', icon: <FolderOpen />, run: run(() => window.spoon.git.revealFile(path, entry.path)) },
+      { label: exactLine ? t('x.openInEditorLine', { values: { line: exactLine } }) : t('Open in editor at change'), icon: <FileCode2 />, disabled: deleted, run: run(() => openAt()) },
+      ...(fileEditors.length > 1 ? fileEditors.map((editor) => ({ label: t('x.openWithEditor', { values: { name: editor.label } }), icon: <FileCode2 />, disabled: deleted, run: run(() => openAt(editor.id)) })) : []),
+      { label: t('Show in Windows Explorer'), icon: <FolderOpen />, run: run(() => window.spoon.git.revealFile(path, entry.path)) },
       {},
-      { label: staged ? (n > 1 ? `Unstage ${n} files` : 'Unstage') : n > 1 ? `Stage ${n} files` : 'Stage', icon: staged ? <Undo2 /> : <Plus />, run: run(() => doStage(paths, staged)) },
-      { label: n > 1 ? `Stash ${n} files…` : 'Stash this file…', icon: <IcoStash />, run: () => onOverlay({ type: 'stash', files: paths }) },
-      { label: n > 1 ? `Discard ${n} files…` : 'Discard changes…', icon: <Trash2 />, danger: true, run: run(async () => { if (await window.spoon.app.confirm(n > 1 ? `Discard changes in ${n} files?` : `Discard changes in ${entry.path}?`)) { await window.spoon.git.discard(path, paths); onReload() } }) },
+      { label: staged ? (n > 1 ? t('x.unstageFiles', { count: n }) : t('Unstage')) : n > 1 ? t('x.stageFiles', { count: n }) : t('Stage'), icon: staged ? <Undo2 /> : <Plus />, run: run(() => doStage(paths, staged)) },
+      { label: n > 1 ? t('x.stashFiles', { count: n }) : t('Stash this file…'), icon: <IcoStash />, run: () => onOverlay({ type: 'stash', files: paths }) },
+      { label: n > 1 ? t('x.discardFiles', { count: n }) : t('Discard changes…'), icon: <Trash2 />, danger: true, run: run(async () => { if (await window.spoon.app.confirm(n > 1 ? t('x.discardChangesInFiles', { count: n }) : t('x.discardChangesInFile', { values: { name: entry.path } }))) { await window.spoon.git.discard(path, paths); onReload() } }) },
       {},
-      { label: n > 1 ? 'Copy relative paths' : 'Copy relative path', icon: <Copy />, run: run(() => window.spoon.app.copy(paths.join('\n'))) },
-      { label: n > 1 ? 'Copy full paths' : 'Copy full path', icon: <Copy />, run: run(() => window.spoon.app.copy(paths.map((p) => joinRepoPath(path, p)).join('\n'))) },
-      { label: 'Copy patch', icon: <Copy />, disabled: entry.untracked, run: run(async () => { const parts = await Promise.all(paths.map((p) => window.spoon.git.diff(path, { path: p, staged }))); await window.spoon.app.copy((parts.flat() as FileDiff[]).map((d) => d.patch).join('\n')) }) },
+      { label: n > 1 ? t('Copy relative paths') : t('Copy relative path'), icon: <Copy />, run: run(() => window.spoon.app.copy(paths.join('\n'))) },
+      { label: n > 1 ? t('Copy full paths') : t('Copy full path'), icon: <Copy />, run: run(() => window.spoon.app.copy(paths.map((p) => joinRepoPath(path, p)).join('\n'))) },
+      { label: t('Copy patch'), icon: <Copy />, disabled: entry.untracked, run: run(async () => { const parts = await Promise.all(paths.map((p) => window.spoon.git.diff(path, { path: p, staged }))); await window.spoon.app.copy((parts.flat() as FileDiff[]).map((d) => d.patch).join('\n')) }) },
       {},
-      { label: 'Blame', icon: <ScanLine />, disabled: entry.untracked, run: () => onOverlay({ type: 'blame', file: entry.path }) },
-      { label: 'File history', icon: <History />, disabled: entry.untracked, run: () => onOverlay({ type: 'history', file: entry.path }) }
+      { label: t('Blame'), icon: <ScanLine />, disabled: entry.untracked, run: () => onOverlay({ type: 'blame', file: entry.path }) },
+      { label: t('File history'), icon: <History />, disabled: entry.untracked, run: () => onOverlay({ type: 'history', file: entry.path }) }
     ] }
     setChangeMenu(menu)
   }
@@ -2204,7 +2210,7 @@ function Workspace({
         key={b.fullName}
         className={`side-item branch-row ${b.current ? 'is-current' : ''} ${deep ? 'deep' : ''} ${(sel.kind === 'branch' && sel.name === b.name) || focusBranch === b.name ? 'active' : ''}`}
         style={{ ['--lane-color' as string]: laneColor(branchLanes.get(b.hash) ?? 0) }}
-        title={`${b.name}${b.upstream ? ` · tracks ${b.upstream}` : ''} · Double-click to checkout`}
+        title={t('x.branchTooltip', { values: { name: b.name, upstream: b.upstream ?? '' } })}
         role="button" tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); clickLocalBranch(b) } }}
         onClick={() => clickLocalBranch(b)}
@@ -2235,7 +2241,7 @@ function Workspace({
         key={b.fullName}
         className={`side-item branch-row indent ${deep ? 'deep' : ''} ${(sel.kind === 'remote' && sel.name === b.name) || focusBranch === b.name ? 'active' : ''}`}
         style={{ ['--lane-color' as string]: laneColor(branchLanes.get(b.hash) ?? 1) }}
-        title={`${b.name} · Double-click to checkout`}
+        title={t('x.branchTooltipRemote', { values: { name: b.name } })}
         role="button" tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); clickRemoteBranch(b) } }}
         onClick={() => clickRemoteBranch(b)}
@@ -2256,7 +2262,7 @@ function Workspace({
     await catchErr(async () => {
       const ready = await window.spoon.git.isRepo(dest)
       if (status === 'uninitialized' || !ready) {
-        const ok = await window.spoon.app.confirm(`Initialize submodule "${rel}" and open it?`)
+        const ok = await window.spoon.app.confirm(t('x.initSubmodulePrompt', { values: { name: rel } }))
         if (!ok) return
         await window.spoon.git.submoduleUpdate(path, rel)
       }
@@ -2278,7 +2284,7 @@ function Workspace({
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSel({ kind: 'changes' }) } }}
           onClick={() => setSel({ kind: 'changes' })}
         >
-          <IcoChanges /> Changes {changesCount ? <span className="counter">({changesCount})</span> : null}
+          <IcoChanges /> {t('Changes')} {changesCount ? <span className="counter">({changesCount})</span> : null}
         </div>
         <div
           className={`side-item ${sel.kind === 'all' ? 'active' : ''}`}
@@ -2290,18 +2296,18 @@ function Workspace({
             setPulseHashes([])
           }}
         >
-          <IcoBranch /> History
+          <IcoBranch /> {t('History')}
         </div>
         <div className="side-filter">
-          <input placeholder="Find a branch or tag…" aria-label="Filter branches and tags" value={filter} onChange={(e) => setFilter(e.target.value)} />
+          <input placeholder={t('Find a branch or tag…')} aria-label={t('Filter branches and tags')} value={filter} onChange={(e) => setFilter(e.target.value)} />
         </div>
         <div className="side-scroll">
           {snap.status.detached && (
             <>
-              <div className="side-sec">Current</div>
+              <div className="side-sec">{t('Current')}</div>
               <div className="side-item">
                 <span className="dot-check">*</span>
-                <span className="label">detached HEAD</span>
+                <span className="label">{t('x.detachedHead')}</span>
               </div>
             </>
           )}
@@ -2310,7 +2316,7 @@ function Workspace({
             onClick={() => toggleSide('local')}
             onContextMenu={(e) => {
               e.preventDefault()
-              openMenu([{ id: 'new', label: 'New branch...' }], (id) => {
+              openMenu([{ id: 'new', label: t('New branch...') }], (id) => {
                 if (id === 'new') onOverlay({ type: 'branch' })
               })
             }}
@@ -2318,11 +2324,11 @@ function Workspace({
             <span className="ico chev" aria-hidden>
               <IcoChevron />
             </span>
-            Local
+            {t('Local')}
             <span className="sec-count">{localVisible.length}</span>
             <Button
               className="sec-add"
-              title="New branch"
+              title={t('New branch')}
               onClick={(e) => {
                 e.stopPropagation()
                 onOverlay({ type: 'branch' })
@@ -2354,7 +2360,7 @@ function Workspace({
                 )
               })}
               {!localVisible.length && (
-                <div className="side-empty">{filtering ? 'No matching branches' : 'No local branches'}</div>
+                <div className="side-empty">{filtering ? t('No matching branches') : t('No local branches')}</div>
               )}
             </>
           )}
@@ -2363,7 +2369,7 @@ function Workspace({
             onClick={() => toggleSide('remotes')}
             onContextMenu={(e) => {
               e.preventDefault()
-              openMenu([{ id: 'add', label: 'Add remote...' }], (id) => {
+              openMenu([{ id: 'add', label: t('Add remote...') }], (id) => {
                 if (id === 'add') onOverlay({ type: 'remote' })
               })
             }}
@@ -2371,13 +2377,13 @@ function Workspace({
             <span className="ico chev" aria-hidden>
               <IcoChevron />
             </span>
-            Remotes
+            {t('Remotes')}
             <span className="sec-count">
               {remoteGroups.reduce((n, [, branches]) => n + branches.filter((b) => match(b.name)).length, 0)}
             </span>
             <Button
               className="sec-add"
-              title="Add remote"
+              title={t('Add remote')}
               onClick={(e) => {
                 e.stopPropagation()
                 onOverlay({ type: 'remote' })
@@ -2436,14 +2442,14 @@ function Workspace({
                             </Fragment>
                           )
                         })}
-                        {!visible.length && <div className="side-empty">No branches yet</div>}
+                        {!visible.length && <div className="side-empty">{t('No branches yet')}</div>}
                       </>
                     )}
                   </div>
                 )
               })
             ) : (
-              <div className="side-empty">Fetch to see remote branches</div>
+              <div className="side-empty">{t('Fetch to see remote branches')}</div>
             ))}
           <div
             className={`side-sec toggle ${sideOpen('tags') ? 'open' : ''}`}
@@ -2452,20 +2458,20 @@ function Workspace({
             <span className="ico chev" aria-hidden>
               <IcoChevron />
             </span>
-            Tags
-            <span className="sec-count">{snap.tags.filter((t) => match(t.name)).length}</span>
+            {t('Tags')}
+            <span className="sec-count">{snap.tags.filter((tag) => match(tag.name)).length}</span>
           </div>
           {sideOpen('tags') &&
-            snap.tags.filter((t) => match(t.name)).map((t) => (
-              <div key={t.name} className="side-item" onClick={() => setSel({ kind: 'tag', name: t.name })}>
+            snap.tags.filter((tag) => match(tag.name)).map((tag) => (
+              <div key={tag.name} className="side-item" onClick={() => setSel({ kind: 'tag', name: tag.name })}>
                 <IcoTag />
-                <span className="label">{t.name}</span>
+                <span className="label">{tag.name}</span>
               </div>
             ))}
-          {sideOpen('tags') && !snap.tags.filter((t) => match(t.name)).length && (
-            <div className="side-empty">No tags</div>
+          {sideOpen('tags') && !snap.tags.filter((tag) => match(tag.name)).length && (
+            <div className="side-empty">{t('No tags')}</div>
           )}
-          <div className="side-sec">Stashes</div>
+          <div className="side-sec">{t('Stashes')}</div>
           {snap.stashes.map((s) => (
             <div
               key={s.selector}
@@ -2476,19 +2482,19 @@ function Workspace({
               <span className="label">{s.message}</span>
             </div>
           ))}
-          <div className="side-sec">Submodules</div>
+          <div className="side-sec">{t('Submodules')}</div>
           {snap.submodules.map((s) => (
             <div
               key={s.path}
               className="side-item"
-              title="Open this submodule in a tab"
+              title={t('Open this submodule in a tab')}
               onClick={() => void openSubmodule(s.path, s.status)}
             >
               <span className="label">{s.path}</span>
               {s.status !== 'ok' && <span className="sub-st">{s.status}</span>}
             </div>
           ))}
-          {!snap.submodules.length && <div className="empty">No submodules</div>}
+          {!snap.submodules.length && <div className="empty">{t('No submodules')}</div>}
         </div>
       </div>
       <div
@@ -2506,36 +2512,36 @@ function Workspace({
       <div className="main">
         {snap.status.merging || snap.status.rebasing || snap.status.cherryPicking ? (
           <div className="banner">
-            {snap.status.merging && 'Merge in progress'}
-            {snap.status.rebasing && 'Rebase in progress'}
-            {snap.status.cherryPicking && 'Cherry-pick in progress'}
-            {snap.status.conflicted.length ? `  -  ${snap.status.conflicted.length} conflicted file(s)` : ''}
+            {snap.status.merging && t('Merge in progress')}
+            {snap.status.rebasing && t('Rebase in progress')}
+            {snap.status.cherryPicking && t('Cherry-pick in progress')}
+            {snap.status.conflicted.length ? `  -  ${t('x.conflictedFiles', { count: snap.status.conflicted.length })}` : ''}
             <Button className="ghost" onClick={() => snap.status.conflicted[0] && onOverlay({ type: 'conflict', file: snap.status.conflicted[0].path })}>
-              Resolve
+              {t('Resolve')}
             </Button>
             <Button className="ghost" onClick={() => void window.spoon.git.continueMerge(path).then(onReload)}>
-              Continue
+              {t('Continue')}
             </Button>
             <Button className="ghost" onClick={() => void (snap.status.rebasing ? window.spoon.git.rebaseAbort(path) : window.spoon.git.abortMerge(path)).then(onReload)}>
-              Abort
+              {t('Abort')}
             </Button>
           </div>
         ) : null}
 
         {showingChanges ? (
           <div className="changes-page">
-            <div className="history-heading changes-heading"><div><span className="eyebrow">REPOSITORY</span><h2>Working changes <span>{snap.status.unstagedCount + snap.status.stagedCount}</span></h2></div><div className="history-context"><Avatar email={snap.identity.email} name={snap.identity.name} /><span className="branch-pill"><IcoBranch /> {snap.status.branch}</span></div></div>
+            <div className="history-heading changes-heading"><div><span className="eyebrow">{t('REPOSITORY')}</span><h2>{t('Working changes')} <span>{snap.status.unstagedCount + snap.status.stagedCount}</span></h2></div><div className="history-context"><Avatar email={snap.identity.email} name={snap.identity.name} /><span className="branch-pill"><IcoBranch /> {snap.status.branch}</span></div></div>
           <div className="changes">
             <div className="file-cols" style={{ width: filesW }}>
               {changeTypes.length > 1 && (
-                <div className="type-filter" role="group" aria-label="Filter changes by file type">
+                <div className="type-filter" role="group" aria-label={t('Filter changes by file type')}>
                   <button
                     type="button"
                     className={`type-chip${activeTypes.length ? '' : ' on'}`}
                     aria-pressed={!activeTypes.length}
                     onClick={() => setTypeFilter([])}
                   >
-                    All
+                    {t('All')}
                   </button>
                   {changeTypes.map(([type, count]) => (
                     <button
@@ -2543,19 +2549,19 @@ function Workspace({
                       key={type}
                       className={`type-chip${activeTypes.includes(type) ? ' on' : ''}`}
                       aria-pressed={activeTypes.includes(type)}
-                      title={`Show only ${type} files`}
+                      title={t('x.showOnlyTypeFiles', { values: { type: type === '(none)' ? t('(none)') : type } })}
                       onClick={() =>
-                        setTypeFilter(activeTypes.includes(type) ? activeTypes.filter((t) => t !== type) : [...activeTypes, type])
+                        setTypeFilter(activeTypes.includes(type) ? activeTypes.filter((x) => x !== type) : [...activeTypes, type])
                       }
                     >
-                      {type} <span>{count}</span>
+                      {type === '(none)' ? t('(none)') : type} <span>{count}</span>
                     </button>
                   ))}
                 </div>
               )}
               <FilePane
-                title="Unstaged"
-                action={unstagedSel.length > 1 ? `Stage ${unstagedSel.length}` : activeTypes.length ? 'Stage shown' : 'Stage'}
+                title={t('Unstaged')}
+                action={unstagedSel.length > 1 ? t('x.stageFilesShort', { count: unstagedSel.length }) : activeTypes.length ? t('Stage shown') : t('Stage')}
                 onAction={() =>
                   void doStage(unstagedSel.length ? unstagedSel : visibleUnstaged.map((f) => f.path))
                 }
@@ -2588,8 +2594,8 @@ function Workspace({
                 }}
               />
               <FilePane
-                title="Staged"
-                action={stagedSel.length > 1 ? `Unstage ${stagedSel.length}` : activeTypes.length ? 'Unstage shown' : 'Unstage'}
+                title={t('Staged')}
+                action={stagedSel.length > 1 ? t('x.unstageFilesShort', { count: stagedSel.length }) : activeTypes.length ? t('Unstage shown') : t('Unstage')}
                 onAction={() => void doStage(stagedSel.length ? stagedSel : visibleStaged.map((f) => f.path), true)}
                 files={visibleStaged}
                 selected={stagedSel}
@@ -2622,13 +2628,13 @@ function Workspace({
             />
             <div className="diff-col">
               <div className="diff-tools">
-                <span className="diff-path">{file || 'Select a file'}</span>
+                <span className="diff-path">{file || t('Select a file')}</span>
                 <span style={{ marginLeft: 'auto' }} />
-                <Button className="ghost" disabled={planBusy} title="Split changes into planned commits (Ctrl+Alt+A)" onClick={() => void runAnalysis()}>
-                  {planBusy ? 'Analyzing...' : 'Analyze'}
+                <Button className="ghost" disabled={planBusy} title={t('Split changes into planned commits (Ctrl+Alt+A)')} onClick={() => void runAnalysis()}>
+                  {planBusy ? t('Analyzing...') : t('Analyze')}
                 </Button>
                 <Button className="ghost" onClick={() => setSplit((v) => !v)}>
-                  {split ? 'Unified' : 'Side by side'}
+                  {split ? t('Unified') : t('Side by side')}
                 </Button>
               </div>
               <DiffView
@@ -2644,7 +2650,7 @@ function Workspace({
                   file &&
                   void catchErr(async () => {
                     // Discarding a hunk cannot be undone; ask like file discard does.
-                    if (mode === 'discard' && !(await window.spoon.app.confirm(`Discard this change in ${file}?`, 'This cannot be undone.'))) return
+                    if (mode === 'discard' && !(await window.spoon.app.confirm(t('x.discardChangeInFile', { values: { name: file } }), t('This cannot be undone.')))) return
                     await window.spoon.git.applyHunk(path, file, h, mode)
                     onReload()
                   })
@@ -2653,10 +2659,10 @@ function Workspace({
               {analysis && (
                 <div className="analysis">
                   <div className="analysis-head">
-                    <strong>Analysis</strong>
-                    <span className="hint">Local commits only. Ordered so each one still works after the previous. Nothing is pushed.</span>
+                    <strong>{t('Analysis')}</strong>
+                    <span className="hint">{t('Local commits only. Ordered so each one still works after the previous. Nothing is pushed.')}</span>
                     <Button className="ghost" onClick={() => { setAnalysis(null); setDrafts([]) }}>
-                      Close
+                      {t('Close')}
                     </Button>
                   </div>
                   <p className="analysis-summary">{analysis.summary}</p>
@@ -2670,7 +2676,7 @@ function Workspace({
                             setDrafts((rows) => rows.map((row, i) => (i === index ? { ...row, include: e.target.checked } : row)))
                           }
                         />
-                        Commit {index + 1}
+                        {t('x.commitNumbered', { count: index + 1 })}
                       </label>
                       <input
                         value={item.subject}
@@ -2680,7 +2686,7 @@ function Workspace({
                       />
                       <textarea
                         value={item.body}
-                        placeholder="Body"
+                        placeholder={t('Body')}
                         onChange={(e) =>
                           setDrafts((rows) => rows.map((row, i) => (i === index ? { ...row, body: e.target.value } : row)))
                         }
@@ -2688,13 +2694,13 @@ function Workspace({
                       <div className="hint">{item.rationale}</div>
                       <div className="plan-files">{item.files.join(', ')}</div>
                       <Button className="ghost" onClick={() => setMsg(item.body.trim() ? `${item.subject}\n\n${item.body.trim()}` : item.subject)}>
-                        Use message
+                        {t('Use message')}
                       </Button>
                     </div>
                   ))}
                   <div className="row-btns">
                     <Button className="primary" disabled={!drafts.some((item) => item.include)} onClick={() => void createPlannedCommits()}>
-                      Create {drafts.filter((item) => item.include).length} commits
+                      {t('x.createCommitsCount', { count: drafts.filter((item) => item.include).length })}
                     </Button>
                   </div>
                 </div>
@@ -2719,7 +2725,7 @@ function Workspace({
               />
               <div className="commit-box">
                 <textarea
-                  placeholder="Commit message · Ctrl+Enter to commit"
+                  placeholder={t('Commit message · Ctrl+Enter to commit')}
                   value={msg}
                   style={{ height: Math.max(64, commitH - 80) }}
                   onChange={(e) => setMsg(e.target.value)}
@@ -2731,7 +2737,7 @@ function Workspace({
                 />
                 <div className="commit-bar">
                   <label className="check">
-                    <input type="checkbox" checked={amend} onChange={(e) => setAmend(e.target.checked)} /> Amend
+                    <input type="checkbox" checked={amend} onChange={(e) => setAmend(e.target.checked)} /> {t('Amend')}
                   </label>
                   <span className="hint">{msg.split('\n')[0]?.length || 0}/72</span>
                   <ModelMenu
@@ -2748,40 +2754,40 @@ function Workspace({
                     <Button
                       className="primary ico-text"
                       disabled={aiBusy || commitBusy || (!msg.trim() && !amend)}
-                      title="Commit the message above (Ctrl+Enter)"
+                      title={t('Commit the message above (Ctrl+Enter)')}
                       onClick={() => void doCommit(false)}
                     >
                       <IcoCheck />
-                      <span>{commitBusy ? 'Committing...' : 'Commit'}</span>
+                      <span>{commitBusy ? t('Committing...') : t('Commit')}</span>
                     </Button>
                     <Button
                       className="ghost ico-text"
                       disabled={aiBusy || commitBusy || (!msg.trim() && !amend)}
-                      title="Commit the message above and push (Ctrl+Shift+Enter)"
+                      title={t('Commit the message above and push (Ctrl+Shift+Enter)')}
                       onClick={() => void doCommit(true)}
                     >
                       <IcoPush />
-                      <span>Commit & push</span>
+                      <span>{t('Commit & push')}</span>
                     </Button>
                     <Button
                       className="primary ai ico-text"
                       disabled={aiBusy || commitBusy}
                       title={
                         (settings?.aiCommitMode ?? 'commit') === 'fill'
-                          ? 'Write a commit message from the changes'
-                          : 'Analyze the changes, split them into commits that stay valid in order, and create them all at once'
+                          ? t('Write a commit message from the changes')
+                          : t('Analyze the changes, split them into commits that stay valid in order, and create them all at once')
                       }
                       onClick={() => void aiFill()}
                     >
                       <IcoAi />
                       <span>
                         {aiBusy
-                          ? aiBusyText || 'Working...'
+                          ? aiBusyText || t('Working...')
                           : (settings?.aiCommitMode ?? 'commit') === 'fill'
-                            ? 'AI message'
+                            ? t('AI message')
                             : (settings?.aiCommitMode ?? 'commit') === 'commit-push'
-                              ? 'AI commit & push'
-                              : 'AI commits'}
+                              ? t('AI commit & push')
+                              : t('AI commits')}
                       </span>
                     </Button>
                   </div>
@@ -2799,7 +2805,7 @@ function Workspace({
             onDrop={() =>
               void catchErr(async () => {
                 const current = snap.stashes.find((s) => s.selector === sel.selector)
-                const ok = await window.spoon.app.confirm(`Drop stash "${current?.message ?? sel.selector}"?`)
+                const ok = await window.spoon.app.confirm(t('x.dropStashPrompt', { values: { name: current?.message ?? sel.selector } }))
                 if (!ok) return
                 await window.spoon.git.stashDrop(path, sel.selector)
                 setSel({ kind: 'all' })
@@ -2810,33 +2816,33 @@ function Workspace({
         ) : (
           <>
             <div className="history-heading">
-              <div><span className="eyebrow">REPOSITORY</span><h2>Commit history <span>{visibleCommits.length}</span></h2></div>
+              <div><span className="eyebrow">{t('REPOSITORY')}</span><h2>{t('Commit history')} <span>{visibleCommits.length}</span></h2></div>
               <div className="history-context">
-                <div className="history-layout-buttons" role="group" aria-label="History layout">
-                  {(['bottom', 'side', 'columns'] as const).map((layout) => <Button key={layout} variant="segment" aria-pressed={historyLayout === layout} title={layout === 'bottom' ? 'Details below history' : layout === 'side' ? 'Details beside history' : 'History, Commit, Changes and File Tree in columns'} onClick={() => onPatchSettings({ historyLayout: layout })}>{layout === 'bottom' ? 'Bottom' : layout === 'side' ? 'Side' : 'Columns'}</Button>)}
+                <div className="history-layout-buttons" role="group" aria-label={t('History layout')}>
+                  {(['bottom', 'side', 'columns'] as const).map((layout) => <Button key={layout} variant="segment" aria-pressed={historyLayout === layout} title={layout === 'bottom' ? t('Details below history') : layout === 'side' ? t('Details beside history') : t('History, Commit, Changes and File Tree in columns')} onClick={() => onPatchSettings({ historyLayout: layout })}>{layout === 'bottom' ? t('Bottom') : layout === 'side' ? t('Side') : t('Columns')}</Button>)}
                 </div>
                 <span className="branch-pill" title={focusBranch || scopeRef || snap.status.branch}><IcoBranch /> {focusBranch || scopeRef || snap.status.branch}</span>
-                {focusBranch && <Button className="ghost tiny" onClick={() => { setFocusBranch(null); setPulseHashes([]); setSel({ kind: 'all' }) }}>Show all</Button>}
+                {focusBranch && <Button className="ghost tiny" onClick={() => { setFocusBranch(null); setPulseHashes([]); setSel({ kind: 'all' }) }}>{t('Show all')}</Button>}
               </div>
             </div>
             <div className="commit-search">
               <input
-                placeholder={scopeRef ? `Commits in ${scopeRef}` : 'Search commits'}
-                aria-label="Search commits by message, author or hash"
+                placeholder={scopeRef ? t('x.commitsInScope', { values: { name: scopeRef } }) : t('Search commits')}
+                aria-label={t('Search commits by message, author or hash')}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
               <Button className="ghost" onClick={() => onOverlay({ type: 'ir' })}>
-                Interactive Rebase
+                {t('Interactive Rebase')}
               </Button>
               <Button className="ghost" onClick={() => onOverlay({ type: 'reflog' })}>
-                Reflog
+                {t('Reflog')}
               </Button>
             </div>
             <div className={`history-content history-${historyLayout}`}>
             <div className="history-list-pane">
             {scopeRef && !refCommits ? (
-              <div className="empty loading">Loading commits...</div>
+              <div className="empty loading">{t('Loading commits...')}</div>
             ) : (
             <VirtualCommits
               commits={visibleCommits}
@@ -2850,14 +2856,14 @@ function Workspace({
                 e.preventDefault()
                 openMenu(
                   [
-                    { id: `co:${c.hash}`, label: 'Checkout' },
-                    { id: `ch:${c.hash}`, label: 'Cherry-pick' },
-                    { id: `rv:${c.hash}`, label: 'Revert' },
+                    { id: `co:${c.hash}`, label: t('Checkout') },
+                    { id: `ch:${c.hash}`, label: t('Cherry-pick') },
+                    { id: `rv:${c.hash}`, label: t('Revert') },
                     { type: 'separator' },
-                    { id: `rs:${c.hash}`, label: 'Reset mixed...' },
-                    { id: `rh:${c.hash}`, label: 'Reset hard...' },
-                    { id: `cp:${c.hash}`, label: 'Copy SHA' },
-                    { id: `tg:${c.hash}`, label: 'Create tag...' }
+                    { id: `rs:${c.hash}`, label: t('Reset mixed...') },
+                    { id: `rh:${c.hash}`, label: t('Reset hard...') },
+                    { id: `cp:${c.hash}`, label: t('Copy SHA') },
+                    { id: `tg:${c.hash}`, label: t('Create tag...') }
                   ],
                   (s) => {
                     void catchErr(async () => {
@@ -2865,11 +2871,11 @@ function Workspace({
                       if (s.startsWith('ch:')) await window.spoon.git.cherryPick(path, [s.slice(3)])
                       if (s.startsWith('rv:')) await window.spoon.git.revert(path, [s.slice(3)])
                       if (s.startsWith('rs:')) {
-                        const ok = await window.spoon.app.confirm('Reset mixed to this commit?', 'Keeps your file changes and unstages them.')
+                        const ok = await window.spoon.app.confirm(t('Reset mixed to this commit?'), t('Keeps your file changes and unstages them.'))
                         if (ok) await window.spoon.git.reset(path, s.slice(3), 'mixed')
                       }
                       if (s.startsWith('rh:')) {
-                        const ok = await window.spoon.app.confirm('Hard reset to this commit?', 'Discards uncommitted changes.')
+                        const ok = await window.spoon.app.confirm(t('Hard reset to this commit?'), t('Discards uncommitted changes.'))
                         if (ok) await window.spoon.git.reset(path, s.slice(3), 'hard')
                       }
                       if (s.startsWith('cp:')) await window.spoon.app.copy(s.slice(3))
@@ -2902,9 +2908,9 @@ function Workspace({
             {commit && historyLayout !== 'columns' && (
               <div className="details" style={historyLayout === 'bottom' ? { height: detailsH, flex: '0 0 auto' } : undefined}>
                 <div className="detail-tabs">
-                  {(['commit', 'changes', 'tree'] as const).map((t) => (
-                    <Button variant="tab" key={t} className={detailTab === t ? 'active' : ''} onClick={() => setDetailTab(t)}>
-                      {t === 'commit' ? 'Commit' : t === 'changes' ? 'Changes' : 'File Tree'}
+                  {(['commit', 'changes', 'tree'] as const).map((tab) => (
+                    <Button variant="tab" key={tab} className={detailTab === tab ? 'active' : ''} onClick={() => setDetailTab(tab)}>
+                      {tab === 'commit' ? t('Commit') : tab === 'changes' ? t('Changes') : t('File Tree')}
                     </Button>
                   ))}
                 </div>
@@ -2922,9 +2928,9 @@ function Workspace({
               </div>
             )}
             {commit && historyLayout === 'columns' && <>
-              <section className="history-column"><h3>Commit</h3><div className="detail-body"><CommitDetails c={commit} /></div></section>
-              <section className="history-column history-diff-column"><h3>Changes</h3><div className="detail-body"><DiffView repo={path} rev={commit.hash} diffs={commitDiffs} split={split} /></div></section>
-              <section className="history-column"><h3>File Tree</h3><div className="detail-body"><FileTree nodes={tree} onHistory={(f) => onOverlay({ type: 'history', file: f })} onBlame={(f) => onOverlay({ type: 'blame', file: f, rev: commit.hash })} /></div></section>
+              <section className="history-column"><h3>{t('Commit')}</h3><div className="detail-body"><CommitDetails c={commit} /></div></section>
+              <section className="history-column history-diff-column"><h3>{t('Changes')}</h3><div className="detail-body"><DiffView repo={path} rev={commit.hash} diffs={commitDiffs} split={split} /></div></section>
+              <section className="history-column"><h3>{t('File Tree')}</h3><div className="detail-body"><FileTree nodes={tree} onHistory={(f) => onOverlay({ type: 'history', file: f })} onBlame={(f) => onOverlay({ type: 'blame', file: f, rev: commit.hash })} /></div></section>
             </>}
             </div>
           </>
@@ -2963,6 +2969,7 @@ function FilePane({
   onContext?: (file: StatusEntry, event: MouseEvent) => void
   flex?: number
 }) {
+  const t = useT()
   return (
     <div className="file-pane" style={{ flex: `${flex} 1 0` }}>
       <div className="file-head">
@@ -3001,7 +3008,7 @@ function FilePane({
             </span>
           </div>
         ))}
-        {!files.length && <div className="empty">No files</div>}
+        {!files.length && <div className="empty">{t('No files')}</div>}
       </div>
     </div>
   )
@@ -3020,6 +3027,7 @@ function StashView({
   onApply: (pop: boolean) => void
   onDrop: () => void
 }) {
+  const t = useT()
   const [diffs, setDiffs] = useState<FileDiff[] | null>(null)
   const [err, setErr] = useState('')
   const selector = stash?.selector
@@ -3035,7 +3043,7 @@ function StashView({
       .catch((reason: unknown) => { if (current) setErr(reason instanceof Error ? reason.message : String(reason)) })
     return () => { current = false }
   }, [repo, selector, hash])
-  if (!stash) return <div className="empty">That stash is no longer in the list.</div>
+  if (!stash) return <div className="empty">{t('That stash is no longer in the list.')}</div>
   return (
     <div className="stash-view">
       <h2>{stash.message}</h2>
@@ -3044,17 +3052,17 @@ function StashView({
       </p>
       <div className="row-btns">
         <Button className="primary" onClick={() => onApply(false)}>
-          Apply
+          {t('Apply')}
         </Button>
         <Button className="ghost" onClick={() => onApply(true)}>
-          Pop
+          {t('Pop')}
         </Button>
         <Button className="ghost" onClick={onDrop}>
-          Drop
+          {t('Drop')}
         </Button>
       </div>
       <div className="stash-files">
-        {err ? <div className="empty">{err}</div> : !diffs ? <div className="empty loading">Loading stash...</div> : <DiffView repo={repo} rev={stash.selector} diffs={diffs} split={split} />}
+        {err ? <div className="empty">{err}</div> : !diffs ? <div className="empty loading">{t('Loading stash...')}</div> : <DiffView repo={repo} rev={stash.selector} diffs={diffs} split={split} />}
       </div>
     </div>
   )
@@ -3103,6 +3111,7 @@ function UnifiedHunks({
   onLineContext?: LineContext
   onHunk?: (h: DiffHunk, mode: 'stage' | 'unstage' | 'discard') => void
 }) {
+  const t = useT()
   return (
     <>
       {diff.hunks.map((h, hi) => (
@@ -3110,13 +3119,13 @@ function UnifiedHunks({
           {onHunk && (
             <div className="hunk-actions">
               <Button className="ghost" onClick={() => onHunk(h, 'stage')}>
-                Stage
+                {t('Stage')}
               </Button>
               <Button className="ghost" onClick={() => onHunk(h, 'unstage')}>
-                Unstage
+                {t('Unstage')}
               </Button>
               <Button className="ghost" onClick={() => onHunk(h, 'discard')}>
-                Discard
+                {t('Discard')}
               </Button>
             </div>
           )}
@@ -3150,7 +3159,8 @@ function DiffView({
   onLineContext?: LineContext
   onHunk?: (h: DiffHunk, mode: 'stage' | 'unstage' | 'discard') => void
 }) {
-  if (!diffs.length) return <div className="empty">No diff</div>
+  const t = useT()
+  if (!diffs.length) return <div className="empty">{t('No diff')}</div>
   return (
     <div className="diff-view">
       {diffs.map((d) => {
@@ -3163,13 +3173,13 @@ function DiffView({
           {media && repo ? (
             <MediaCompare repo={repo} file={d.path} origPath={d.origPath} rev={rev} staged={staged} kind={media.kind} mime={media.mime} />
           ) : d.binary ? (
-            <div className="empty">Binary file. Spoon previews images, video, audio, and PDF.</div>
+            <div className="empty">{t('Binary file. Spoon previews images, video, audio, and PDF.')}</div>
           ) : !d.hunks.length ? (
-            <div className="empty">{d.untracked ? 'Empty new file.' : 'No text changes (mode or rename only).'}</div>
+            <div className="empty">{d.untracked ? t('Empty new file.') : t('No text changes (mode or rename only).')}</div>
           ) : null}
           {media && showText ? (
             <details className="media-code">
-              <summary>Text diff</summary>
+              <summary>{t('Text diff')}</summary>
               {split ? <SplitHunks diff={d} onLineContext={onLineContext} /> : <UnifiedHunks diff={d} onHunk={hunkAction} onLineContext={onLineContext} />}
             </details>
           ) : !media && !d.binary ? (
@@ -3199,6 +3209,7 @@ function MediaCompare({
   kind: MediaKind
   mime: string
 }) {
+  const t = useT()
   const [pair, setPair] = useState<MediaPair | null>(null)
   const [err, setErr] = useState('')
   useEffect(() => {
@@ -3218,9 +3229,15 @@ function MediaCompare({
     }
   }, [repo, file, origPath, rev, staged])
   if (err) return <div className="empty">{err}</div>
-  if (!pair) return <div className="empty loading">Loading preview...</div>
+  if (!pair) return <div className="empty loading">{t('Loading preview...')}</div>
   const stash = rev?.startsWith('stash@{')
-  const titles = stash ? ['Before stash', 'Stashed'] : rev ? ['Parent', 'This commit'] : staged ? ['HEAD', 'Staged'] : ['Before', 'Working copy']
+  const titles = stash
+    ? [t('Before stash'), t('Stashed')]
+    : rev
+      ? [t('Parent'), t('This commit')]
+      : staged
+        ? ['HEAD', t('Staged')]
+        : [t('Before'), t('Working copy')]
   return (
     <div className={`media-preview${kind === 'image' ? ' images' : ''}`}>
       <MediaPane repo={repo} file={origPath || file} title={titles[0]} side={pair.before} fallback={{ kind, mime }} />
@@ -3267,6 +3284,7 @@ function MediaPane({
   side: MediaSide
   fallback: { kind: MediaKind; mime: string }
 }) {
+  const t = useT()
   const [failed, setFailed] = useState(false)
   const [size, setSize] = useState('')
   const kind = side.kind === 'binary' ? fallback.kind : side.kind
@@ -3285,19 +3303,19 @@ function MediaPane({
         {size ? ` · ${size}` : ''}
       </div>
       {side.missing ? (
-        <div className="media-frame empty-frame">Not in this version</div>
+        <div className="media-frame empty-frame">{t('Not in this version')}</div>
       ) : side.tooLarge || !src ? (
         <div className="media-frame empty-frame">
-          This file is too large to preview inline.
+          {t('This file is too large to preview inline.')}
           <Button className="ghost" onClick={() => void window.spoon.git.openFile(repo, file)}>
-            Open
+            {t('Open')}
           </Button>
         </div>
       ) : failed ? (
         <div className="media-frame empty-frame">
-          Could not render this {svg ? 'SVG' : kind}.
+          {t('x.couldNotRender', { values: { kind: svg ? 'SVG' : t('x.mediaKind', { values: { kind } }) } })}
           <Button className="ghost" onClick={() => void window.spoon.git.openFile(repo, file)}>
-            Open
+            {t('Open')}
           </Button>
         </div>
       ) : kind === 'image' ? (
@@ -3321,11 +3339,11 @@ function MediaPane({
       ) : kind === 'pdf' ? (
         <iframe title={title} src={src} />
       ) : (
-        <div className="media-frame empty-frame">No preview for this file type.</div>
+        <div className="media-frame empty-frame">{t('No preview for this file type.')}</div>
       )}
       {!side.missing && !side.tooLarge && (
         <Button className="ghost" onClick={() => void window.spoon.git.openFile(repo, file)}>
-          Open file
+          {t('Open file')}
         </Button>
       )}
     </div>
@@ -3351,6 +3369,7 @@ function VirtualCommits({
   onSelect: (c: CommitInfo) => void
   onContext: (c: CommitInfo, e: MouseEvent) => void
 }) {
+  const t = useT()
   const ref = useRef<HTMLDivElement>(null)
   const [scrollTop, setScrollTop] = useState(0)
   const [height, setHeight] = useState(400)
@@ -3373,13 +3392,13 @@ function VirtualCommits({
   return (
     <div
       className="commit-list"
-      aria-label="Commit history"
+      aria-label={t('Commit history')}
       style={{ ['--graph-w' as string]: `${width}px`, ['--commit-min-w' as string]: `${width + 650}px` }}
       ref={ref}
       onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
     >
-      <div className="commit-columns" aria-hidden="true"><span>Graph</span><span>Commit message</span><span>Author</span><span>SHA</span><span>Date</span></div>
-      {!commits.length && <div className="history-empty"><IcoBranch /><strong>No commits to show</strong><span>Try a different search or select another branch.</span></div>}
+      <div className="commit-columns" aria-hidden="true"><span>{t('Graph')}</span><span>{t('Commit message')}</span><span>{t('Author')}</span><span>{t('SHA')}</span><span>{t('Date')}</span></div>
+      {!commits.length && <div className="history-empty"><IcoBranch /><strong>{t('No commits to show')}</strong><span>{t('Try a different search or select another branch.')}</span></div>}
       <div style={{ height: commits.length * RH, position: 'relative' }}>
         {commits.slice(start, end).map((c, i) => (
           <div key={c.hash} style={{ position: 'absolute', top: (start + i) * RH, left: 0, right: 0, height: RH }}>
@@ -3422,6 +3441,7 @@ const CommitRow = memo(function CommitRow({
   onClick: () => void
   onContext: (e: MouseEvent) => void
 }) {
+  const t = useT()
   const refs = c.refs.filter((r) => r.type !== 'head').sort((a, b) => Number(b.current) - Number(a.current))
   return (
     <div className={`commit-row ${selected ? 'sel' : ''}`} role="button" tabIndex={0}
@@ -3433,7 +3453,7 @@ const CommitRow = memo(function CommitRow({
         {refs
           .slice(0, 2)
           .map((r) => (
-            <span key={r.name + r.type} title={`${r.current ? 'Current branch · ' : ''}${r.name}`} className={`ref-pill ${r.current ? 'current' : ''}`} style={{ ['--lane-color' as string]: laneColor(c.lane) }}>
+            <span key={r.name + r.type} title={`${r.current ? t('x.currentBranchPrefix') : ''}${r.name}`} className={`ref-pill ${r.current ? 'current' : ''}`} style={{ ['--lane-color' as string]: laneColor(c.lane) }}>
               {r.type === 'tag' ? <IcoTag /> : <IcoBranch />}
               <span>{r.name}</span>
               {r.current && <b>HEAD</b>}
@@ -3455,13 +3475,14 @@ const CommitRow = memo(function CommitRow({
 })
 
 function CommitDetails({ c }: { c: CommitInfo }) {
+  const t = useT()
   return (
     <div>
       <div className="commit-meta">
         <div className="who">
           <Avatar email={c.email} name={c.author} big />
           <div>
-            <div className="kv">AUTHOR</div>
+            <div className="kv">{t('AUTHOR')}</div>
             <div>
               {c.author} &lt;{c.email}&gt;
             </div>
@@ -3471,7 +3492,7 @@ function CommitDetails({ c }: { c: CommitInfo }) {
         <div className="who">
           <Avatar email={c.committerEmail} name={c.committer} big />
           <div>
-            <div className="kv">COMMITTER</div>
+            <div className="kv">{t('COMMITTER')}</div>
             <div>
               {c.committer} &lt;{c.committerEmail}&gt;
             </div>
@@ -3479,10 +3500,10 @@ function CommitDetails({ c }: { c: CommitInfo }) {
         </div>
       </div>
       <div className="kv" style={{ marginTop: 12 }}>
-        SHA <span className="hash" onClick={() => void window.spoon.app.copy(c.hash)}>{c.hash}</span>
+        {t('SHA')} <span className="hash" onClick={() => void window.spoon.app.copy(c.hash)}>{c.hash}</span>
       </div>
       <div className="kv">
-        PARENTS{' '}
+        {t('PARENTS')}{' '}
         {c.parents.map((p) => (
           <span key={p} className="hash">
             {p.slice(0, 7)}{' '}
@@ -3551,6 +3572,7 @@ function DialogHost({
   onAiSettings: () => void
   onSettings: (next?: Settings) => Promise<void>
 }) {
+  const t = useT()
   if (!overlay) return null
   if (overlay.type === 'about') return <AboutDialog onClose={onClose} onHelp={onHelp} />
   if (overlay.type === 'settings')
@@ -3569,12 +3591,12 @@ function DialogHost({
     return <HealthDialog path={path} onClose={onClose} />
   if (overlay.type === 'clone') return <CloneDialog onClose={onClose} onOpen={onOpen} />
   if (overlay.type === 'init') return <InitDialog onClose={onClose} onOpen={onOpen} />
-  if (overlay.type === 'branch' && path) return <FieldDialog title="New Branch" label="Name" onClose={onClose} onOk={async (name) => { await window.spoon.git.createBranch(path, name, true); onReload(); onClose() }} />
+  if (overlay.type === 'branch' && path) return <FieldDialog title={t('New Branch')} label={t('Name')} onClose={onClose} onOk={async (name) => { await window.spoon.git.createBranch(path, name, true); onReload(); onClose() }} />
   if (overlay.type === 'rename' && path)
     return (
       <FieldDialog
-        title={`Rename ${overlay.from}`}
-        label="New name"
+        title={t('x.renameNamed', { values: { name: overlay.from } })}
+        label={t('New name')}
         initial={overlay.from}
         onClose={onClose}
         onOk={async (name) => {
@@ -3584,14 +3606,14 @@ function DialogHost({
         }}
       />
     )
-  if (overlay.type === 'tag' && path) return <FieldDialog title="Create Tag" label="Name" onClose={onClose} onOk={async (name) => { await window.spoon.git.createTag(path, name, name, overlay.hash); onReload(); onClose() }} />
+  if (overlay.type === 'tag' && path) return <FieldDialog title={t('Create Tag')} label={t('Name')} onClose={onClose} onOk={async (name) => { await window.spoon.git.createTag(path, name, name, overlay.hash); onReload(); onClose() }} />
   if (overlay.type === 'stash' && path)
     return <StashDialog path={path} files={overlay.files} settings={settings} accounts={accounts} onClose={onClose} onReload={onReload} onAiSettings={onAiSettings} />
   if (overlay.type === 'remote' && path)
     return (
       <RemoteDialog
-        title="Add remote"
-        action="Add"
+        title={t('Add remote')}
+        action={t('Add')}
         onClose={onClose}
         onOk={async (name, url) => {
           await window.spoon.git.addRemote(path, name, url)
@@ -3603,8 +3625,8 @@ function DialogHost({
   if (overlay.type === 'remote-edit' && path)
     return (
       <RemoteDialog
-        title={`Edit ${overlay.name}`}
-        action="Save"
+        title={t('x.editNamed', { values: { name: overlay.name } })}
+        action={t('Save')}
         initialName={overlay.name}
         initialUrl={overlay.url}
         lockName
@@ -3619,8 +3641,8 @@ function DialogHost({
   if (overlay.type === 'remote-rename' && path)
     return (
       <FieldDialog
-        title={`Rename remote ${overlay.from}`}
-        label="New name"
+        title={t('x.renameRemoteNamed', { values: { name: overlay.from } })}
+        label={t('New name')}
         initial={overlay.from}
         onClose={onClose}
         onOk={async (name) => {
@@ -3633,7 +3655,7 @@ function DialogHost({
   if (overlay.type === 'merge' && path)
     return (
       <ConfirmOp
-        title={`Merge ${overlay.ref}`}
+        title={t('x.mergeInto', { values: { name: overlay.ref } })}
         onClose={onClose}
         onOk={async () => {
           await window.spoon.git.merge(path, overlay.ref, true, false)
@@ -3645,7 +3667,7 @@ function DialogHost({
   if (overlay.type === 'rebase' && path)
     return (
       <ConfirmOp
-        title={`Rebase onto ${overlay.ref}`}
+        title={t('x.rebaseOnto', { values: { name: overlay.ref } })}
         onClose={onClose}
         onOk={async () => {
           await window.spoon.git.rebase(path, overlay.ref)
@@ -3661,8 +3683,8 @@ function DialogHost({
   if (overlay.type === 'reflog' && path) return <ReflogDialog path={path} onClose={onClose} />
   if (overlay.type === 'device')
     return (
-      <Modal title="Sign in with Grok" onClose={onClose}>
-        <p>Open the browser and enter this code:</p>
+      <Modal title={t('Sign in with Grok')} onClose={onClose}>
+        <p>{t('Open the browser and enter this code:')}</p>
         <h2>{overlay.userCode}</h2>
         <p className="hint">{overlay.url}</p>
       </Modal>
@@ -3683,12 +3705,13 @@ function Modal({
   wide?: boolean
   className?: string
 }) {
+  const t = useT()
   return (
     <div className="dialog-back" onMouseDown={onClose}>
       <div className={`dialog ${wide ? 'wide' : ''} ${className ?? ''}`.trim()} onMouseDown={(e) => e.stopPropagation()}>
         <div className="dialog-head">
           <h2>{title}</h2>
-          <Button variant="icon" aria-label="Close" title="Close" onClick={onClose}><IcoClose /></Button>
+          <Button variant="icon" aria-label={t('Close')} title={t('Close')} onClick={onClose}><IcoClose /></Button>
         </div>
         <div className="dialog-body">{children}</div>
       </div>
@@ -3713,6 +3736,7 @@ function StashDialog({
   onReload: () => void
   onAiSettings: () => void
 }) {
+  const t = useT()
   const [message, setMessage] = useState('')
   const [aiBusy, setAiBusy] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -3756,39 +3780,39 @@ function StashDialog({
   }
 
   return (
-    <Modal title={count ? `Stash ${count === 1 ? fileName(files![0]) : `${count} files`}` : 'Stash changes'} onClose={onClose}>
-      <label>Message</label>
+    <Modal title={count ? t('x.stashNamed', { values: { name: count === 1 ? fileName(files![0]) : t('x.filesCount', { count }) } }) : t('Stash changes')} onClose={onClose}>
+      <label>{t('Message')}</label>
       <div className="row-btns stash-message">
         <input
           autoFocus
           value={message}
-          placeholder={aiBusy ? 'Writing...' : 'Optional'}
+          placeholder={aiBusy ? t('Writing...') : t('x.optional')}
           disabled={aiBusy}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && void save(message)}
         />
-        <Button className="ghost ico-text" disabled={aiBusy || busy} title={aiConnected ? 'Write the stash message from the changes' : 'Connect an AI provider'} onClick={() => void writeWithAi()}>
+        <Button className="ghost ico-text" disabled={aiBusy || busy} title={aiConnected ? t('Write the stash message from the changes') : t('Connect an AI provider')} onClick={() => void writeWithAi()}>
           <IcoAi />
-          <span>{aiBusy ? 'Writing...' : aiConnected ? 'Write with AI' : 'Connect AI'}</span>
+          <span>{aiBusy ? t('Writing...') : aiConnected ? t('Write with AI') : t('Connect AI')}</span>
         </Button>
       </div>
-      <p className="hint">{count ? 'Only the selected files are stashed, including new ones.' : 'All changes are stashed, including new files.'}</p>
+      <p className="hint">{count ? t('Only the selected files are stashed, including new ones.') : t('All changes are stashed, including new files.')}</p>
       {error && <p className="hint danger-text">{error}</p>}
       <div className="dialog-foot">
         <Button className="ghost" onClick={onClose}>
-          Cancel
+          {t('Cancel')}
         </Button>
         <Button
           className="ghost ico-text"
           disabled={aiBusy || busy || !aiConnected}
-          title="Write the message with AI and stash right away"
+          title={t('Write the message with AI and stash right away')}
           onClick={() => void writeWithAi().then((text) => { if (text != null) void save(text) })}
         >
           <IcoAi />
-          <span>AI stash</span>
+          <span>{t('AI stash')}</span>
         </Button>
         <Button className="primary" disabled={aiBusy || busy} onClick={() => void save(message)}>
-          {busy ? 'Stashing...' : 'Stash'}
+          {busy ? t('Stashing...') : t('Stash')}
         </Button>
       </div>
     </Modal>
@@ -3810,6 +3834,7 @@ function FieldDialog({
   onClose: () => void
   onOk: (v: string) => Promise<void>
 }) {
+  const t = useT()
   const [v, setV] = useState(initial)
   const [busy, setBusy] = useState(false)
   const ready = optional || !!v.trim()
@@ -3826,10 +3851,10 @@ function FieldDialog({
       <input autoFocus value={v} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void submit()} />
       <div className="dialog-foot">
         <Button className="ghost" onClick={onClose}>
-          Cancel
+          {t('Cancel')}
         </Button>
         <Button className="primary" disabled={!ready || busy} onClick={() => void submit()}>
-          OK
+          {t('OK')}
         </Button>
       </div>
     </Modal>
@@ -3837,15 +3862,16 @@ function FieldDialog({
 }
 
 function ConfirmOp({ title, onClose, onOk }: { title: string; onClose: () => void; onOk: () => Promise<void> }) {
+  const t = useT()
   return (
     <Modal title={title} onClose={onClose}>
-      <p>Continue?</p>
+      <p>{t('Continue?')}</p>
       <div className="dialog-foot">
         <Button className="ghost" onClick={onClose}>
-          Cancel
+          {t('Cancel')}
         </Button>
         <Button className="primary" onClick={() => void onOk()}>
-          Continue
+          {t('Continue')}
         </Button>
       </div>
     </Modal>
@@ -3853,6 +3879,7 @@ function ConfirmOp({ title, onClose, onOk }: { title: string; onClose: () => voi
 }
 
 function CloneDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (p: string) => void }) {
+  const t = useT()
   const [url, setUrl] = useState('')
   const [dir, setDir] = useState('')
   const [name, setName] = useState('')
@@ -3860,22 +3887,22 @@ function CloneDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (p: str
   const [busy, setBusy] = useState(false)
   useEffect(() => window.spoon.app.on('clone:progress', (l) => setProgress((p) => p + String(l))), [])
   return (
-    <Modal title="Clone" onClose={onClose}>
-      <label>URL</label>
+    <Modal title={t('Clone')} onClose={onClose}>
+      <label>{t('URL')}</label>
       <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://github.com/org/repo.git" />
-      <label>Parent directory</label>
+      <label>{t('Parent directory')}</label>
       <div className="row-btns">
         <input value={dir} onChange={(e) => setDir(e.target.value)} />
         <Button className="ghost" onClick={async () => setDir((await window.spoon.app.pickDirectory()) || dir)}>
-          Browse
+          {t('Browse')}
         </Button>
       </div>
-      <label>Folder name (optional)</label>
+      <label>{t('Folder name (optional)')}</label>
       <input value={name} onChange={(e) => setName(e.target.value)} />
       {progress && <pre className="hint">{progress.slice(-400)}</pre>}
       <div className="dialog-foot">
         <Button className="ghost" onClick={onClose}>
-          Cancel
+          {t('Cancel')}
         </Button>
         <Button
           className="primary"
@@ -3890,7 +3917,7 @@ function CloneDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (p: str
             }).finally(() => setBusy(false))
           }}
         >
-          {busy ? 'Cloning...' : 'Clone'}
+          {busy ? t('Cloning...') : t('Clone')}
         </Button>
       </div>
     </Modal>
@@ -3898,19 +3925,20 @@ function CloneDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (p: str
 }
 
 function InitDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (p: string) => void }) {
+  const t = useT()
   const [dir, setDir] = useState('')
   return (
-    <Modal title="Create repository" onClose={onClose}>
-      <label>Directory</label>
+    <Modal title={t('Create repository')} onClose={onClose}>
+      <label>{t('Directory')}</label>
       <div className="row-btns">
         <input value={dir} onChange={(e) => setDir(e.target.value)} />
         <Button className="ghost" onClick={async () => setDir((await window.spoon.app.pickDirectory()) || dir)}>
-          Browse
+          {t('Browse')}
         </Button>
       </div>
       <div className="dialog-foot">
         <Button className="ghost" onClick={onClose}>
-          Cancel
+          {t('Cancel')}
         </Button>
         <Button
           className="primary"
@@ -3923,7 +3951,7 @@ function InitDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (p: stri
             })
           }
         >
-          Create
+          {t('Create')}
         </Button>
       </div>
     </Modal>
@@ -3947,17 +3975,18 @@ function RemoteDialog({
   onClose: () => void
   onOk: (n: string, u: string) => Promise<void>
 }) {
+  const t = useT()
   const [n, setN] = useState(initialName)
   const [u, setU] = useState(initialUrl)
   return (
     <Modal title={title} onClose={onClose}>
-      <label>Name</label>
+      <label>{t('Name')}</label>
       <input value={n} onChange={(e) => setN(e.target.value)} disabled={lockName} />
-      <label>URL</label>
+      <label>{t('URL')}</label>
       <input value={u} onChange={(e) => setU(e.target.value)} placeholder="https://github.com/org/repo.git" />
       <div className="dialog-foot">
         <Button className="ghost" onClick={onClose}>
-          Cancel
+          {t('Cancel')}
         </Button>
         <Button className="primary" disabled={!n.trim() || !u.trim()} onClick={() => void onOk(n.trim(), u.trim())}>
           {action}
@@ -3968,12 +3997,13 @@ function RemoteDialog({
 }
 
 function BlameDialog({ path, file, rev, onClose }: { path: string; file: string; rev?: string; onClose: () => void }) {
+  const t = useT()
   const [lines, setLines] = useState<BlameLine[]>([])
   useEffect(() => {
     void window.spoon.git.blame(path, file, rev).then((l) => setLines(l as BlameLine[]))
   }, [path, file, rev])
   return (
-    <Modal title={`Blame  -  ${file}`} onClose={onClose}>
+    <Modal title={t('x.blameForFile', { values: { name: file } })} onClose={onClose}>
       <div className="blame" style={{ maxHeight: 480, overflow: 'auto' }}>
         {lines.map((l) => (
           <div key={l.number} className="blame-row">
@@ -3985,7 +4015,7 @@ function BlameDialog({ path, file, rev, onClose }: { path: string; file: string;
       </div>
       <div className="dialog-foot">
         <Button className="primary" onClick={onClose}>
-          Close
+          {t('Close')}
         </Button>
       </div>
     </Modal>
@@ -3993,12 +4023,13 @@ function BlameDialog({ path, file, rev, onClose }: { path: string; file: string;
 }
 
 function HistoryDialog({ path, file, onClose }: { path: string; file: string; onClose: () => void }) {
+  const t = useT()
   const [commits, setCommits] = useState<CommitInfo[]>([])
   useEffect(() => {
     void window.spoon.git.history(path, file).then((c) => setCommits(c as CommitInfo[]))
   }, [path, file])
   return (
-    <Modal title={`History  -  ${file}`} onClose={onClose}>
+    <Modal title={t('x.historyForFile', { values: { name: file } })} onClose={onClose}>
       <div style={{ maxHeight: 420, overflow: 'auto' }}>
         {commits.map((c) => (
           <div key={c.hash} className="commit-row" style={{ gridTemplateColumns: '1fr 120px 90px' }}>
@@ -4010,7 +4041,7 @@ function HistoryDialog({ path, file, onClose }: { path: string; file: string; on
       </div>
       <div className="dialog-foot">
         <Button className="primary" onClick={onClose}>
-          Close
+          {t('Close')}
         </Button>
       </div>
     </Modal>
@@ -4018,14 +4049,15 @@ function HistoryDialog({ path, file, onClose }: { path: string; file: string; on
 }
 
 function ReflogDialog({ path, onClose }: { path: string; onClose: () => void }) {
+  const t = useT()
   const [commits, setCommits] = useState<CommitInfo[]>([])
   useEffect(() => {
     void window.spoon.git.reflog(path).then((c) => setCommits(c as CommitInfo[]))
   }, [path])
   return (
-    <Modal title="Reflog" wide onClose={onClose}>
+    <Modal title={t('Reflog')} wide onClose={onClose}>
       <div className="reflog-list">
-        {commits.length === 0 && <div className="side-empty">No reflog entries</div>}
+        {commits.length === 0 && <div className="side-empty">{t('No reflog entries')}</div>}
         {commits.map((c, i) => {
           const p = parseReflogSubject(c.subject)
           return (
@@ -4042,7 +4074,7 @@ function ReflogDialog({ path, onClose }: { path: string; onClose: () => void }) 
       </div>
       <div className="dialog-foot">
         <Button className="primary" onClick={onClose}>
-          Close
+          {t('Close')}
         </Button>
       </div>
     </Modal>
@@ -4060,6 +4092,7 @@ function ConflictDialog({
   onClose: () => void
   onReload: () => void
 }) {
+  const t = useT()
   const [c, setC] = useState<ConflictFile | null>(null)
   const [text, setText] = useState('')
   useEffect(() => {
@@ -4071,27 +4104,27 @@ function ConflictDialog({
   }, [path, file])
   if (!c) return null
   return (
-    <Modal title={`Merge conflict  -  ${file}`} onClose={onClose} wide>
+    <Modal title={t('x.mergeConflictForFile', { values: { name: file } })} onClose={onClose} wide>
       <div className="row-btns">
         <Button className="ghost" onClick={() => setText(c.ours)}>
-          Use ours
+          {t('Use ours')}
         </Button>
         <Button className="ghost" onClick={() => setText(c.theirs)}>
-          Use theirs
+          {t('Use theirs')}
         </Button>
         <Button className="ghost" onClick={() => setText(`${c.ours}\n${c.theirs}`)}>
-          Use both
+          {t('Use both')}
         </Button>
       </div>
       <div className="conflict-grid">
         <textarea value={c.ours} readOnly />
         <textarea value={c.theirs} readOnly />
       </div>
-      <label>Resolved</label>
+      <label>{t('Resolved')}</label>
       <textarea value={text} onChange={(e) => setText(e.target.value)} style={{ height: 120, fontFamily: 'var(--mono)' }} />
       <div className="dialog-foot">
         <Button className="ghost" onClick={onClose}>
-          Cancel
+          {t('Cancel')}
         </Button>
         <Button
           className="primary"
@@ -4103,7 +4136,7 @@ function ConflictDialog({
             })
           }
         >
-          Mark resolved
+          {t('Mark resolved')}
         </Button>
       </div>
     </Modal>
@@ -4119,6 +4152,7 @@ function RebaseDialog({
   onClose: () => void
   onReload: () => void
 }) {
+  const t = useT()
   const [items, setItems] = useState<RebaseTodoItem[]>([])
   const [onto, setOnto] = useState('HEAD')
   const [busy, setBusy] = useState(false)
@@ -4131,8 +4165,8 @@ function RebaseDialog({
     })
   }, [path])
   return (
-    <Modal title="Interactive rebase" onClose={onClose}>
-      {!items.length && <p className="hint working">Loading the current branch...</p>}
+    <Modal title={t('Interactive rebase')} onClose={onClose}>
+      {!items.length && <p className="hint working">{t('Loading the current branch...')}</p>}
       {items.map((it, i) => (
         <div key={it.hash} className="rebase-item">
           <select
@@ -4141,8 +4175,10 @@ function RebaseDialog({
               setItems((xs) => xs.map((x, j) => (j === i ? { ...x, action: e.target.value as RebaseTodoItem['action'] } : x)))
             }
           >
-            {['pick', 'reword', 'edit', 'squash', 'fixup', 'drop'].map((a) => (
-              <option key={a}>{a}</option>
+            {(['pick', 'reword', 'edit', 'squash', 'fixup', 'drop'] as const).map((a) => (
+              <option key={a} value={a}>
+                {t('x.rebaseAction', { values: { action: a } })}
+              </option>
             ))}
           </select>
           <span className="meta">{it.hash.slice(0, 7)}</span>
@@ -4151,7 +4187,7 @@ function RebaseDialog({
       ))}
       <div className="dialog-foot">
         <Button className="ghost" onClick={onClose}>
-          Cancel
+          {t('Cancel')}
         </Button>
         <Button
           className="primary"
@@ -4165,7 +4201,7 @@ function RebaseDialog({
             onClose()
           }}
         >
-          Start
+          {t('Start')}
         </Button>
       </div>
     </Modal>
@@ -4179,6 +4215,7 @@ function LauncherPrefs({
   settings: Settings | null
   onPersist: (patch: Partial<Settings>) => void
 }) {
+  const t = useT()
   const [launchers, setLaunchers] = useState<LauncherInfo[]>([])
   const [defaultId, setDefaultId] = useState(settings?.defaultLauncher || 'cursor')
   const [busy, setBusy] = useState(false)
@@ -4214,10 +4251,10 @@ function LauncherPrefs({
     <div className="launcher-prefs">
       <div className="launcher-prefs-head">
         <span className="hint">
-          Default: <strong>{launchers.find((item) => item.id === defaultId)?.label || defaultId}</strong>
+          {t('Default')}: <strong>{launchers.find((item) => item.id === defaultId)?.label || defaultId}</strong>
         </span>
         <Button type="button" className="ghost tiny" disabled={busy} onClick={() => void reload(true)}>
-          {busy ? 'Scanning…' : 'Rescan PATH'}
+          {busy ? t('Scanning…') : t('Rescan PATH')}
         </Button>
       </div>
       {groups.map((group) => (
@@ -4228,7 +4265,7 @@ function LauncherPrefs({
               <li key={item.id} className={item.available ? '' : 'off'}>
                 <div className="launcher-copy">
                   <strong>{item.label}</strong>
-                  <div className="hint">{item.available ? item.blurb : `Not found on PATH (${item.bins.join(' / ') || 'system'})`}</div>
+                  <div className="hint">{item.available ? item.blurb : t('x.notFoundOnPath', { values: { bins: item.bins.join(' / ') || t('system') } })}</div>
                 </div>
                 <Button
                   type="button"
@@ -4236,7 +4273,7 @@ function LauncherPrefs({
                   disabled={!item.available}
                   onClick={() => void pickDefault(item.id)}
                 >
-                  {defaultId === item.id ? 'Default' : 'Make default'}
+                  {defaultId === item.id ? t('Default') : t('Make default')}
                 </Button>
               </li>
             ))}
@@ -4264,6 +4301,7 @@ function SettingsDialog({
   onClose: () => void
   onSaved: (next?: Settings) => Promise<void>
 }) {
+  const t = useT()
   const [tab, setTab] = useState<PrefsTab>(initialTab ?? lastPrefsTab)
   const [navCollapsed, setNavCollapsed] = useState(lastPrefsNav)
   const [aiNavCollapsed, setAiNavCollapsed] = useState(lastAiNav)
@@ -4350,10 +4388,10 @@ function SettingsDialog({
   }
 
   async function addCustom() {
-    const label = customName.trim() || 'Custom API'
+    const label = customName.trim() || t('Custom API')
     const baseUrl = customUrl.trim()
     if (!/^https?:\/\//i.test(baseUrl)) {
-      await window.spoon.app.error('Base URL must start with http:// or https://')
+      await window.spoon.app.error(t('Base URL must start with http:// or https://'))
       return
     }
     const id = customProviderId(label, [...BUILTIN_AI_IDS, ...AI_SITE_CATALOG.map((s) => s.id), ...endpoints.map((e) => e.id)])
@@ -4364,7 +4402,7 @@ function SettingsDialog({
         baseUrl,
         defaultModel: customModel.trim() || 'gpt-4o-mini',
         needsKey: Boolean(customKey.trim()),
-        blurb: 'Custom OpenAI-compatible endpoint',
+        blurb: t('Custom OpenAI-compatible endpoint'),
         accent: '#0b57d0'
       },
       customKey,
@@ -4382,8 +4420,8 @@ function SettingsDialog({
 
   function providerStatus(p: AiProviderId) {
     const a = acc.find((x) => x.provider === p)
-    if (a?.connected) return { connected: true, text: `Connected${a.label ? ` - ${a.label}` : ''}` }
-    return { connected: false, text: 'Not connected' }
+    if (a?.connected) return { connected: true, text: `${t('Connected')}${a.label ? ` - ${a.label}` : ''}` }
+    return { connected: false, text: t('Not connected') }
   }
 
   return (
@@ -4392,7 +4430,7 @@ function SettingsDialog({
         <div className={`prefs-layout ${navCollapsed ? 'collapsed' : ''}`}>
           <nav
             className="rail"
-            aria-label="Preferences"
+            aria-label={t('Preferences')}
             onKeyDown={(e) => {
               if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
               e.preventDefault()
@@ -4405,14 +4443,14 @@ function SettingsDialog({
               type="button"
               className="rail-toggle"
               aria-expanded={!navCollapsed}
-              aria-label={navCollapsed ? 'Expand menu' : 'Collapse menu'}
-              title={navCollapsed ? 'Expand menu' : 'Collapse menu'}
+              aria-label={navCollapsed ? t('Expand menu') : t('Collapse menu')}
+              title={navCollapsed ? t('Expand menu') : t('Collapse menu')}
               onClick={() => setNavCollapsed((v) => !v)}
             >
               <span className={`rail-chevron ${navCollapsed ? 'flip' : ''}`} aria-hidden="true">
                 <IcoChevron />
               </span>
-              <span className="rail-label">Menu</span>
+              <span className="rail-label">{t('Menu')}</span>
             </Button>
             {PREFS_TABS.map((item) => (
               <Button
@@ -4420,27 +4458,27 @@ function SettingsDialog({
                 type="button"
                 className={`rail-item ${tab === item.id ? 'on' : ''}`}
                 aria-current={tab === item.id ? 'page' : undefined}
-                title={item.label}
+                title={t(item.label)}
                 onClick={() => setTab(item.id)}
               >
                 <span className="rail-ico" aria-hidden="true">
                   <item.Icon />
                 </span>
-                <span className="rail-label">{item.label}</span>
+                <span className="rail-label">{t(item.label)}</span>
               </Button>
             ))}
           </nav>
           <div className="prefs-col">
             <div className="dialog-head">
-              <h2>Preferences</h2>
-              <Button variant="icon" aria-label="Close preferences" title="Close" onClick={onClose}><IcoClose /></Button>
+              <h2>{t('Preferences')}</h2>
+              <Button variant="icon" aria-label={t('Close preferences')} title={t('Close')} onClick={onClose}><IcoClose /></Button>
             </div>
             <div className="prefs-main">
       {tab === 'profile' && <ProfileSettings settings={settings} repo={repo} onPersist={persist} />}
 
       {tab === 'look' && (
         <section className="prefs-pane" role="tabpanel" id="prefs-panel-look" aria-labelledby="prefs-tab-look">
-          <h3>Look</h3>
+          <h3>{t('Look')}</h3>
           <div className="theme-pack-grid">
             {THEME_PACKS.map((pack) => {
               const on = (settings?.themePack ?? 'classic') === pack.id
@@ -4465,14 +4503,14 @@ function SettingsDialog({
                       <span key={c} style={{ background: c }} />
                     ))}
                   </span>
-                  <strong>{pack.label}</strong>
-                  <span className="hint">{pack.blurb}</span>
+                  <strong>{t(pack.label)}</strong>
+                  <span className="hint">{t(pack.blurb)}</span>
                 </Button>
               )
             })}
           </div>
 
-          <h3>Mode</h3>
+          <h3>{t('Mode')}</h3>
           <div className="theme-pack-grid mode-grid">
             {(
               [
@@ -4487,8 +4525,7 @@ function SettingsDialog({
                   label: 'Dark',
                   blurb: 'Dim chrome with soft contrast.',
                   preview: settings?.themePack === 'spoon' ? ['#17112d', '#110c24', '#8339e3'] : ['#2d2d2d', '#1e1e1e', '#6cb6ff']
-                }
-              ] as const
+                }              ] as const
             ).map((item) => {
               const locked = settings?.themePack === 'spacex' && item.id === 'light'
               const on = (settings?.theme ?? 'dark') === item.id
@@ -4499,7 +4536,7 @@ function SettingsDialog({
                   className={`theme-pack-card ${on ? 'on' : ''} mode-${item.id}`}
                   aria-pressed={on}
                   disabled={locked}
-                  title={locked ? 'SpaceX stays dark' : undefined}
+                  title={locked ? t('SpaceX stays dark') : undefined}
                   onClick={() => void persist({ theme: item.id })}
                 >
                   <span className={`theme-preview-surface mode-${item.id}`} aria-hidden="true">
@@ -4508,14 +4545,14 @@ function SettingsDialog({
                       <span className="theme-preview-accent" style={{ background: item.preview[2] }} />
                     </span>
                   </span>
-                  <strong>{item.label}</strong>
-                  <span className="hint">{item.blurb}</span>
+                  <strong>{t(item.label)}</strong>
+                  <span className="hint">{t(item.blurb)}</span>
                 </Button>
               )
             })}
           </div>
 
-          <h3>Icons</h3>
+          <h3>{t('Icons')}</h3>
           <div className="theme-pack-grid mode-grid">
             {(
               [
@@ -4556,15 +4593,15 @@ function SettingsDialog({
                       </span>
                     ))}
                   </span>
-                  <strong>{item.label}</strong>
-                  <span className="hint">{item.blurb}</span>
+                  <strong>{t(item.label)}</strong>
+                  <span className="hint">{t(item.blurb)}</span>
                 </Button>
               )
             })}
           </div>
-          <p className="hint">Color tints toolbar actions. Mono keeps everything in the text color.</p>
+          <p className="hint">{t('Color tints toolbar actions. Mono keeps everything in the text color.')}</p>
 
-          <h3>Accent</h3>
+          <h3>{t('Accent')}</h3>
           <div className="accent-row">
             {ACCENTS.filter((a) => a.id !== 'custom').map((a) => (
               <Button
@@ -4572,12 +4609,12 @@ function SettingsDialog({
                 type="button"
                 className={`accent-swatch ${(settings?.accentId ?? 'blue') === a.id ? 'on' : ''}`}
                 style={{ ['--swatch' as string]: a.swatch }}
-                title={a.label}
-                aria-label={a.label}
+                title={t(a.label)}
+                aria-label={t(a.label)}
                 onClick={() => void persist({ accentId: a.id as AccentId })}
               />
             ))}
-            <label className={`accent-swatch custom ${(settings?.accentId ?? 'blue') === 'custom' ? 'on' : ''}`} title="Custom">
+            <label className={`accent-swatch custom ${(settings?.accentId ?? 'blue') === 'custom' ? 'on' : ''}`} title={t('Custom')}>
               <input
                 type="color"
                 value={settings?.accentCustom ?? '#6cb6ff'}
@@ -4585,19 +4622,21 @@ function SettingsDialog({
               />
             </label>
           </div>
+
+          <LanguagePicker settings={settings} onPersist={(patch) => persist(patch)} />
         </section>
       )}
 
       {tab === 'git' && (
         <section className="prefs-pane" role="tabpanel" id="prefs-panel-git" aria-labelledby="prefs-tab-git">
-          <h3>Automatic fetch</h3>
+          <h3>{t('Automatic fetch')}</h3>
           <label className="check">
             <input
               type="checkbox"
               checked={settings?.autoFetch !== false}
               onChange={(e) => void persist({ autoFetch: e.target.checked })}
             />
-            Fetch the open repository on a timer
+            {t('Fetch the open repository on a timer')}
           </label>
           <label className="check">
             <input
@@ -4605,9 +4644,9 @@ function SettingsDialog({
               checked={!!settings?.autoFetchAll}
               onChange={(e) => void persist({ autoFetchAll: e.target.checked })}
             />
-            Also fetch pinned and recently opened repos
+            {t('Also fetch pinned and recently opened repos')}
           </label>
-          <label>Interval (minutes)</label>
+          <label>{t('Interval (minutes)')}</label>
           <input
             type="number"
             min={1}
@@ -4615,25 +4654,24 @@ function SettingsDialog({
             value={settings?.fetchIntervalMin ?? 10}
             onChange={(e) => void persist({ fetchIntervalMin: Math.max(1, Number(e.target.value) || 10) })}
           />
-          <h3>Updates</h3>
+          <h3>{t('Updates')}</h3>
           <label className="check">
             <input
               type="checkbox"
               checked={settings?.autoUpdate !== false}
               onChange={(e) => void persist({ autoUpdate: e.target.checked })}
             />
-            Download updates automatically
+            {t('Download updates automatically')}
           </label>
-          <p className="hint">Spoon checks GitHub releases a few seconds after launch, then every four hours.</p>
+          <p className="hint">{t('Spoon checks GitHub releases a few seconds after launch, then every four hours.')}</p>
         </section>
       )}
 
       {tab === 'open' && (
         <section className="prefs-pane" role="tabpanel" id="prefs-panel-open" aria-labelledby="prefs-tab-open">
-          <h3>Open with</h3>
+          <h3>{t('Open with')}</h3>
           <p className="hint">
-            Detected IDEs, agent apps, and coding CLIs on PATH. Pick a default for the quick button; use the menu to choose
-            another.
+            {t('Detected IDEs, agent apps, and coding CLIs on PATH. Pick a default for the quick button; use the menu to choose another.')}
           </p>
           <LauncherPrefs settings={settings} onPersist={(patch) => void persist(patch)} />
         </section>
@@ -4644,10 +4682,9 @@ function SettingsDialog({
           <div className="ai-pane-head">
             <div className="ai-commit-card">
               <div className="ai-commit-copy">
-                <h3>AI button</h3>
+                <h3>{t('AI button')}</h3>
                 <p className="hint">
-                  Split changes into several commits, ordered so each one still works after the previous. Commit and Commit
-                  &amp; push use the message in the box. Ctrl+Enter commits. Ctrl+Shift+Enter commits and pushes.
+                  {t('Split changes into several commits, ordered so each one still works after the previous. Commit and Commit & push use the message in the box. Ctrl+Enter commits. Ctrl+Shift+Enter commits and pushes.')}
                 </p>
               </div>
               <div className="seg ai-commit-seg">
@@ -4664,7 +4701,7 @@ function SettingsDialog({
                     className={(settings?.aiCommitMode ?? 'commit') === id ? 'on' : ''}
                     onClick={() => void persist({ aiCommitMode: id })}
                   >
-                    {label}
+                    {t(label)}
                   </Button>
                 ))}
               </div>
@@ -4674,27 +4711,27 @@ function SettingsDialog({
                   checked={settings?.aiStageAll !== false}
                   onChange={(e) => void persist({ aiStageAll: e.target.checked })}
                 />
-                Stage all changes when nothing is staged
+                {t('Stage all changes when nothing is staged')}
               </label>
             </div>
           </div>
           <div className={`ai-layout ${aiNavCollapsed ? 'collapsed' : ''}`}>
-            <nav className="rail ai-rail" aria-label="AI providers">
+            <nav className="rail ai-rail" aria-label={t('AI providers')}>
               <Button
                 type="button"
                 className="rail-toggle"
                 aria-expanded={!aiNavCollapsed}
-                aria-label={aiNavCollapsed ? 'Expand providers' : 'Collapse providers'}
-                title={aiNavCollapsed ? 'Expand providers' : 'Collapse providers'}
+                aria-label={aiNavCollapsed ? t('Expand providers') : t('Collapse providers')}
+                title={aiNavCollapsed ? t('Expand providers') : t('Collapse providers')}
                 onClick={() => setAiNavCollapsed((v) => !v)}
               >
                 <span className={`rail-chevron ${aiNavCollapsed ? 'flip' : ''}`} aria-hidden="true">
                   <IcoChevron />
                 </span>
-                <span className="rail-label">Providers</span>
+                <span className="rail-label">{t('Providers')}</span>
               </Button>
               <div className="ai-rail-scroll">
-              <div className="rail-kicker">Yours</div>
+              <div className="rail-kicker">{t('Yours')}</div>
               {yours.map((p) => {
                 const st = providerStatus(p)
                 const selected = aiPick.type === 'provider' && aiPick.id === p
@@ -4716,7 +4753,7 @@ function SettingsDialog({
                   </Button>
                 )
               })}
-              <div className="rail-kicker">Add</div>
+              <div className="rail-kicker">{t('Add')}</div>
               {catalogLeft.map((site) => (
                 <Button
                   key={site.id}
@@ -4734,20 +4771,20 @@ function SettingsDialog({
                   </span>
                   <span className="rail-copy">
                     <span className="rail-label">{site.label}</span>
-                    <span className="hint">{site.blurb}</span>
+                    <span className="hint">{site.blurb ? t(site.blurb) : ''}</span>
                   </span>
                 </Button>
               ))}
               <Button
                 type="button"
                 className={`rail-item ${aiPick.type === 'custom' ? 'on' : ''}`}
-                title="Custom endpoint"
+                title={t('Custom endpoint')}
                 onClick={() => setAiPick({ type: 'custom' })}
               >
                 <span className="rail-ico" aria-hidden="true">
                   <IcoCreate />
                 </span>
-                <span className="rail-label">Custom endpoint</span>
+                <span className="rail-label">{t('Custom endpoint')}</span>
               </Button>
               </div>
             </nav>
@@ -4777,13 +4814,13 @@ function SettingsDialog({
                           <div className="ai-local">
                             <Button
                               className="ghost"
-                              title={local[p].label ? `Use local session (${local[p].label})` : 'Use local session'}
+                              title={local[p].label ? t('x.useLocalSessionNamed', { values: { name: local[p].label } }) : t('Use local session')}
                               onClick={async () => {
                                 await window.spoon.ai.importLocal(p)
                                 await refresh()
                               }}
                             >
-                              Use local session
+                              {t('Use local session')}
                             </Button>
                             {local[p].label && (
                               <span className="hint ai-mail" title={local[p].label}>
@@ -4808,11 +4845,11 @@ function SettingsDialog({
                               }
                             }}
                           >
-                            Sign in with Grok
+                            {t('Sign in with Grok')}
                           </Button>
                         )}
                         <Button className="ghost" onClick={() => void window.spoon.ai.openConsole(p)}>
-                          Get key
+                          {t('Get key')}
                         </Button>
                         {a?.connected && (
                           <Button
@@ -4822,14 +4859,14 @@ function SettingsDialog({
                               await refresh()
                             }}
                           >
-                            Disconnect
+                            {t('Disconnect')}
                           </Button>
                         )}
                       </div>
                     )}
                     {PAID_AI_PROVIDERS.includes(p) && (
                       <div className="ai-key-row">
-                        <input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Paste API key" />
+                        <input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder={t('Paste API key')} />
                         <Button
                           className="primary"
                           onClick={async () => {
@@ -4838,7 +4875,7 @@ function SettingsDialog({
                             await refresh()
                           }}
                         >
-                          Save
+                          {t('Save')}
                         </Button>
                       </div>
                     )}
@@ -4846,7 +4883,7 @@ function SettingsDialog({
                       <>
                         {endpoint.needsKey && (
                           <div className="ai-key-row">
-                            <input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Paste API key" />
+                            <input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder={t('Paste API key')} />
                             <Button
                               className="primary"
                               onClick={async () => {
@@ -4855,14 +4892,14 @@ function SettingsDialog({
                                 await refresh()
                               }}
                             >
-                              Save
+                              {t('Save')}
                             </Button>
                           </div>
                         )}
                         <div className="ai-actions">
                           {endpoint.consoleUrl && (
                             <Button className="ghost" onClick={() => void window.spoon.ai.openConsole(p)}>
-                              Get key
+                              {t('Get key')}
                             </Button>
                           )}
                           <Button
@@ -4873,7 +4910,7 @@ function SettingsDialog({
                               await refresh()
                             }}
                           >
-                            Remove
+                            {t('Remove')}
                           </Button>
                         </div>
                       </>
@@ -4889,21 +4926,21 @@ function SettingsDialog({
                     </span>
                     <div className="ai-active-copy">
                       <strong>{siteAdding.label}</strong>
-                      <p className="hint">{siteAdding.blurb}</p>
+                      <p className="hint">{siteAdding.blurb ? t(siteAdding.blurb) : ''}</p>
                     </div>
                   </div>
                   {siteAdding.needsKey && (
                     <div className="ai-fields">
-                      <label>API key</label>
-                      <input type="password" value={addKey} onChange={(e) => setAddKey(e.target.value)} placeholder="Paste key" />
-                      <label>Model</label>
+                      <label>{t('API key')}</label>
+                      <input type="password" value={addKey} onChange={(e) => setAddKey(e.target.value)} placeholder={t('Paste key')} />
+                      <label>{t('Model')}</label>
                       <input value={addModel} spellCheck={false} onChange={(e) => setAddModel(e.target.value)} placeholder={siteAdding.defaultModel} />
                     </div>
                   )}
                   <div className="ai-actions">
                     {siteAdding.consoleUrl && (
                       <Button className="ghost" onClick={() => void window.spoon.ai.openConsole(siteAdding.id)}>
-                        Get key
+                        {t('Get key')}
                       </Button>
                     )}
                     <Button
@@ -4911,7 +4948,7 @@ function SettingsDialog({
                       disabled={busyId === siteAdding.id || (siteAdding.needsKey && !addKey.trim())}
                       onClick={() => void addSite(siteAdding, addKey, addModel)}
                     >
-                      {busyId === siteAdding.id ? 'Adding...' : 'Add'}
+                      {busyId === siteAdding.id ? t('Adding...') : t('Add')}
                     </Button>
                   </div>
                 </div>
@@ -4919,37 +4956,37 @@ function SettingsDialog({
               {aiPick.type === 'custom' && (
                 <div className="ai-active">
                   <div className="ai-active-copy">
-                    <strong>Custom endpoint</strong>
-                    <p className="hint">Any OpenAI-compatible base URL — LiteLLM, vLLM, a proxy, or a provider that is not listed.</p>
+                    <strong>{t('Custom endpoint')}</strong>
+                    <p className="hint">{t('Any OpenAI-compatible base URL — LiteLLM, vLLM, a proxy, or a provider that is not listed.')}</p>
                   </div>
                   <div className="custom-grid">
                     <label>
-                      Name
-                      <input value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder="OpenRouter work" />
+                      {t('Name')}
+                      <input value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder={t('OpenRouter work')} />
                     </label>
                     <label>
-                      Base URL
+                      {t('Base URL')}
                       <input value={customUrl} spellCheck={false} onChange={(e) => setCustomUrl(e.target.value)} placeholder="https://openrouter.ai/api/v1" />
                     </label>
                     <label>
-                      API key
-                      <input type="password" value={customKey} onChange={(e) => setCustomKey(e.target.value)} placeholder="Optional for local servers" />
+                      {t('API key')}
+                      <input type="password" value={customKey} onChange={(e) => setCustomKey(e.target.value)} placeholder={t('Optional for local servers')} />
                     </label>
                     <label>
-                      Model
+                      {t('Model')}
                       <input value={customModel} spellCheck={false} onChange={(e) => setCustomModel(e.target.value)} placeholder="gpt-4o-mini" />
                     </label>
                   </div>
                   <div className="ai-actions">
                     <Button className="primary" disabled={!customUrl.trim() || !!busyId} onClick={() => void addCustom()}>
-                      Add custom API
+                      {t('Add custom API')}
                     </Button>
                   </div>
                 </div>
               )}
               {device && (
                 <p className="hint">
-                  Enter code <b>{device.userCode}</b> at {device.url}
+                  {t('x.enterCodeAt', { values: { code: device.userCode, url: device.url } })}
                 </p>
               )}
             </div>
@@ -4960,13 +4997,12 @@ function SettingsDialog({
       {tab === 'help' && (
         <section className="prefs-pane" role="tabpanel" id="prefs-panel-help" aria-labelledby="prefs-tab-help">
           <h3>Spoon{version ? ` ${version}` : ''}</h3>
-          <p>Spoon is a Git client for Windows. Scan or clone repositories from Home, then fetch, pull, and commit from the toolbar.</p>
+          <p>{t('Spoon is a Git client for Windows. Scan or clone repositories from Home, then fetch, pull, and commit from the toolbar.')}</p>
           <p>
-            One AI button writes the message and, depending on Settings → AI, may also commit or push. Ctrl+Enter commits with your
-            message; Ctrl+Shift+Enter commits and pushes. If no provider is connected, the AI button opens Settings → AI.
+            {t('One AI button writes the message and, depending on Settings → AI, may also commit or push. Ctrl+Enter commits with your message; Ctrl+Shift+Enter commits and pushes. If no provider is connected, the AI button opens Settings → AI.')}
           </p>
-          <p className="hint">Celebrate a successful push with confetti: press Ctrl+Shift+. anytime, or use the button below.</p>
-          <h3>Guides</h3>
+          <p className="hint">{t('Celebrate a successful push with confetti: press Ctrl+Shift+. anytime, or use the button below.')}</p>
+          <h3>{t('Guides')}</h3>
           <div className="row-btns" style={{ marginTop: 4 }}>
             <Button
               className="ghost"
@@ -4974,7 +5010,7 @@ function SettingsDialog({
                 document.dispatchEvent(new CustomEvent('spoon-confetti'))
               }}
             >
-              Confetti (Ctrl+Shift+.)
+              {t('Confetti (Ctrl+Shift+.)')}
             </Button>
             <Button
               className="ghost"
@@ -4983,7 +5019,7 @@ function SettingsDialog({
                 window.setTimeout(() => document.dispatchEvent(new CustomEvent('spoon-tour')), 50)
               }}
             >
-              Take the tour
+              {t('Take the tour')}
             </Button>
             <Button
               className="ghost"
@@ -4992,13 +5028,13 @@ function SettingsDialog({
                 onClose()
               }}
             >
-              Check for updates
+              {t('Check for updates')}
             </Button>
             <Button className="ghost" onClick={() => void window.spoon.app.openExternal('https://github.com/elgodox/spoon')}>
               GitHub
             </Button>
             <Button className="ghost" onClick={() => void window.spoon.app.openExternal('https://github.com/elgodox/spoon/issues')}>
-              Report an issue
+              {t('Report an issue')}
             </Button>
           </div>
         </section>
@@ -5007,7 +5043,7 @@ function SettingsDialog({
             </div>
             <div className="dialog-foot">
               <Button className="primary" onClick={onClose}>
-                Done
+                {t('Done')}
               </Button>
             </div>
           </div>
@@ -5028,6 +5064,7 @@ function ModelField({
   catalog?: AiModelCatalog
   onSaved: (next?: Settings) => Promise<void>
 }) {
+  const t = useT()
   const saved = defaultModelFor(provider, settings)
   const choices = modelOptions(catalog, saved)
   const [custom, setCustom] = useState(saved)
@@ -5047,7 +5084,7 @@ function ModelField({
   const name = providerLabel(provider, settings?.aiEndpoints)
   return (
     <>
-      <label>Model</label>
+      <label>{t('Model')}</label>
       <select value={saved} onChange={(e) => void save(e.target.value)}>
         {choices.map((item) => (
           <option key={item.id} value={item.id}>
@@ -5055,7 +5092,7 @@ function ModelField({
           </option>
         ))}
       </select>
-      <label>Model id</label>
+      <label>{t('Model id')}</label>
       <input
         value={custom}
         spellCheck={false}
@@ -5067,10 +5104,10 @@ function ModelField({
       />
       <p className="hint">
         {catalog?.live
-          ? `${catalog.models.length} models from ${name}. The list refreshes on its own.`
+          ? t('x.modelsFromProvider', { values: { count: catalog.models.length, name } })
           : catalog?.error
             ? catalog.error
-            : 'Connect this provider to load every model it offers.'}
+            : t('Connect this provider to load every model it offers.')}
       </p>
     </>
   )
@@ -5110,6 +5147,7 @@ function TabChip({
   onClose: () => void
   onMenu: (x: number, y: number) => void
 }) {
+  const t = useT()
   return (
     <div
       className={`tab ${active ? 'active' : ''}`}
@@ -5122,12 +5160,12 @@ function TabChip({
         onMenu(event.clientX, event.clientY)
       }}
     >
-      <Button type="button" className="tab-hit" title="Right-click to group by color or workspace" onClick={onFocus}>
+      <Button type="button" className="tab-hit" title={t('Right-click to group by color or workspace')} onClick={onFocus}>
         {tab.color ? <i className="tab-dot" style={{ background: tab.color }} /> : null}
         <span className="name">{tab.name}</span>
         {dirty ? <span className="tab-dirty">*</span> : null}
       </Button>
-      <Button type="button" className="x" aria-label={`Close ${tab.name}`} onClick={onClose}>
+      <Button type="button" className="x" aria-label={t('x.closeNamed', { values: { name: tab.name } })} onClick={onClose}>
         <IcoClose />
       </Button>
     </div>
@@ -5151,6 +5189,7 @@ function WorkspaceGroupMenu({
   onClose: () => void
   onCloseGroup: () => void
 }) {
+  const t = useT()
   return (
     <div className="tab-menu-back" onMouseDown={onClose}>
       <div
@@ -5158,10 +5197,10 @@ function WorkspaceGroupMenu({
         style={{ left: Math.max(8, Math.min(x, window.innerWidth - 220)), top: Math.max(8, Math.min(y, window.innerHeight - 120)) }}
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <Button type="button" className="tab-menu-item" onClick={onEdit}>Edit workspace</Button>
-        <Button type="button" className="tab-menu-item" onClick={onSave}>Save open repositories</Button>
+        <Button type="button" className="tab-menu-item" onClick={onEdit}>{t('Edit workspace')}</Button>
+        <Button type="button" className="tab-menu-item" onClick={onSave}>{t('Save open repositories')}</Button>
         <Button type="button" className="tab-menu-item danger" onClick={onCloseGroup}>
-          {label ? `Close workspace “${label}”` : 'Close group'}
+          {label ? t('x.closeWorkspaceNamed', { values: { name: label } }) : t('Close group')}
         </Button>
       </div>
     </div>
@@ -5187,6 +5226,7 @@ function TabGroupMenu({
   onWorkspace: (workspace: RepoWorkspace) => void
   onCloseWorkspace?: () => void
 }) {
+  const t = useT()
   return (
     <div className="tab-menu-back" onMouseDown={onClose}>
       <div
@@ -5194,16 +5234,16 @@ function TabGroupMenu({
         style={{ left: Math.max(8, Math.min(x, window.innerWidth - 220)), top: Math.max(8, Math.min(y, window.innerHeight - 220)) }}
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <div className="tab-menu-label">Color</div>
+        <div className="tab-menu-label">{t('Color')}</div>
         <div className="swatches">
           {WORKSPACE_COLORS.map((color) => (
             <Button key={color} type="button" className="swatch" style={{ background: color }} aria-label={color} onClick={() => onColor(color)} />
           ))}
         </div>
         <Button type="button" className="tab-menu-item" onClick={() => onColor(null)}>
-          Ungroup
+          {t('Ungroup')}
         </Button>
-        <div className="tab-menu-label">Workspace</div>
+        <div className="tab-menu-label">{t('Workspace')}</div>
         {workspaces.length ? (
           workspaces.map((workspace) => (
             <Button key={workspace.id} type="button" className="tab-menu-item" onClick={() => onWorkspace(workspace)}>
@@ -5212,11 +5252,11 @@ function TabGroupMenu({
             </Button>
           ))
         ) : (
-          <p className="hint">Save a workspace from Home first.</p>
+          <p className="hint">{t('Save a workspace from Home first.')}</p>
         )}
         {canCloseWorkspace && onCloseWorkspace ? (
           <Button type="button" className="tab-menu-item danger" onClick={onCloseWorkspace}>
-            Close workspace
+            {t('Close workspace')}
           </Button>
         ) : null}
       </div>
@@ -5230,6 +5270,7 @@ function WorkspaceEditor({ workspace, recent, onClose, onSave }: {
   onClose: () => void
   onSave: (patch: { name: string; color: string; repos: string[] }) => Promise<void>
 }) {
+  const t = useT()
   const [name, setName] = useState(workspace.name)
   const [color, setColor] = useState(workspace.color)
   const [repos, setRepos] = useState(workspace.repos)
@@ -5243,11 +5284,11 @@ function WorkspaceEditor({ workspace, recent, onClose, onSave }: {
     catch (reason) { setError((reason as Error).message) }
     finally { setBusy(false) }
   }
-  return <Modal title="Edit workspace" onClose={() => { if (!busy) onClose() }}>
+  return <Modal title={t('Edit workspace')} onClose={() => { if (!busy) onClose() }}>
     <div className="workspace-editor">
-      <label>Workspace name<input autoFocus value={name} disabled={busy} onChange={(event) => setName(event.target.value)} /></label>
-      <div className="swatches" aria-label="Workspace color">{WORKSPACE_COLORS.map((item) => <Button key={item} className={`swatch ${item === color ? 'on' : ''}`} style={{ background: item }} aria-label={item} aria-pressed={item === color} disabled={busy} onClick={() => setColor(item)} />)}</div>
-      <strong>Repositories · {repos.length}</strong>
+      <label>{t('Workspace name')}<input autoFocus value={name} disabled={busy} onChange={(event) => setName(event.target.value)} /></label>
+      <div className="swatches" aria-label={t('Workspace color')}>{WORKSPACE_COLORS.map((item) => <Button key={item} className={`swatch ${item === color ? 'on' : ''}`} style={{ background: item }} aria-label={item} aria-pressed={item === color} disabled={busy} onClick={() => setColor(item)} />)}</div>
+      <strong>{t('Repositories')} · {repos.length}</strong>
       <div className="workspace-repo-options">{choices.map((path) => <label key={path.toLowerCase()} title={path}>
         <input type="checkbox" disabled={busy} checked={repos.some((repo) => repo.toLowerCase() === path.toLowerCase())} onChange={(event) => setRepos((current) => event.target.checked ? [...current, path] : current.filter((repo) => repo.toLowerCase() !== path.toLowerCase()))} />
         <span>{recent.find((repo) => repo.path.toLowerCase() === path.toLowerCase())?.name || fileName(path)}<small>{path}</small></span>
@@ -5257,9 +5298,9 @@ function WorkspaceEditor({ workspace, recent, onClose, onSave }: {
         const paths = typeof picked === 'string' ? [picked] : picked?.repos ?? []
         setExtra((current) => [...current, ...paths])
         setRepos((current) => [...new Map([...current, ...paths].map((path) => [path.toLowerCase(), path])).values()])
-      })}>Add repositories…</Button>
+      })}>{t('Add repositories…')}</Button>
       {error && <p role="alert">{error}</p>}
-      <div className="profile-actions"><Button className="primary" disabled={busy || !name.trim() || !repos.length} onClick={() => void save()}>{busy ? 'Saving…' : 'Save workspace'}</Button><Button disabled={busy} onClick={onClose}>Cancel</Button></div>
+      <div className="profile-actions"><Button className="primary" disabled={busy || !name.trim() || !repos.length} onClick={() => void save()}>{busy ? t('Saving…') : t('Save workspace')}</Button><Button disabled={busy} onClick={onClose}>{t('Cancel')}</Button></div>
     </div>
   </Modal>
 }
@@ -5287,6 +5328,7 @@ function WorkspaceManager({
   onWorkspaces: (workspaces: RepoWorkspace[]) => void
   onOpenAiSettings: () => void
 }) {
+  const t = useT()
   const [aiBusy, setAiBusy] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
   const [draft, setDraft] = useState<(WorkspaceSuggestion & { include: boolean; color: string })[] | null>(null)
@@ -5298,7 +5340,7 @@ function WorkspaceManager({
 
   async function runAiAnalyze() {
     if (recent.length < 2) {
-      setAiError('Add at least two repositories first.')
+      setAiError(t('Add at least two repositories first.'))
       return
     }
     if (!aiConnected) {
@@ -5344,12 +5386,12 @@ function WorkspaceManager({
   }
 
   return (
-    <Modal title="Workspaces" onClose={onClose} wide>
+    <Modal title={t('Workspaces')} onClose={onClose} wide>
       <div className="ws-ai-bar">
         <div className="ws-ai-copy">
-          <strong>AI workspaces</strong>
+          <strong>{t('AI workspaces')}</strong>
           <div className="hint">
-            Analyze your repository list and save related groups. Saved workspaces stay in Spoon memory.
+            {t('Analyze your repository list and save related groups. Saved workspaces stay in Spoon memory.')}
           </div>
         </div>
         <Button
@@ -5359,7 +5401,7 @@ function WorkspaceManager({
           onClick={() => void runAiAnalyze()}
         >
           <IcoAi />
-          {aiBusy && !draft ? 'Analyzing…' : aiConnected ? 'Analyze with AI' : 'Connect AI'}
+          {aiBusy && !draft ? t('Analyzing…') : aiConnected ? t('Analyze with AI') : t('Connect AI')}
         </Button>
       </div>
       {aiError && <p className="hint danger-text">{aiError}</p>}
@@ -5396,7 +5438,7 @@ function WorkspaceManager({
           </ul>
           <div className="ws-ai-actions">
             <Button type="button" className="ghost" disabled={aiBusy} onClick={() => setDraft(null)}>
-              Discard
+              {t('Discard')}
             </Button>
             <Button
               type="button"
@@ -5404,13 +5446,13 @@ function WorkspaceManager({
               disabled={aiBusy || !draft.some((item) => item.include)}
               onClick={() => void persistDraft()}
             >
-              {aiBusy ? 'Saving…' : 'Save to memory'}
+              {aiBusy ? t('Saving…') : t('Save to memory')}
             </Button>
           </div>
         </div>
       )}
       {!workspaces.length && !draft ? (
-        <p className="hint">No saved workspaces yet. Select repositories on Home and choose Save, or analyze with AI.</p>
+        <p className="hint">{t('No saved workspaces yet. Select repositories on Home and choose Save, or analyze with AI.')}</p>
       ) : workspaces.length > 0 ? (
         <ul className="ws-admin">
           {workspaces.map((workspace) => {
@@ -5425,23 +5467,23 @@ function WorkspaceManager({
                 <div className="ws-admin-actions">
                     <>
                       <Button type="button" className="ghost" onClick={() => onOpen(workspace)}>
-                        Open
+                        {t('Open')}
                       </Button>
                       <Button type="button" className="ghost" onClick={() => onEdit(workspace)}>
-                        Edit
+                        {t('Edit')}
                       </Button>
                       <Button
                         type="button"
                         className="ghost danger"
                         onClick={() => {
                           void window.spoon.app
-                            .confirm(`Delete workspace “${workspace.name}”?`, 'Repositories stay on disk and in the list.')
+                            .confirm(t('x.deleteWorkspaceNamed', { values: { name: workspace.name } }), t('Repositories stay on disk and in the list.'))
                             .then((ok) => {
                               if (ok) onDelete(workspace.id)
                             })
                         }}
                       >
-                        Delete
+                        {t('Delete')}
                       </Button>
                     </>
                 </div>
@@ -5471,17 +5513,18 @@ function QuickLaunch({
   onOpenWorkspace: (workspace: RepoWorkspace) => void
   onAction: (a: string) => void
 }) {
+  const t = useT()
   const [q, setQ] = useState('')
   const items = [
     ...workspaces.map((workspace) => ({
       id: workspace.id,
-      label: `Workspace ${workspace.name}`,
+      label: t('x.workspaceNamed', { values: { name: workspace.name } }),
       run: () => onOpenWorkspace(workspace)
     })),
-    ...recent.map((r) => ({ id: r.path, label: `Open ${r.name}`, run: () => onOpen(r.path, r.name) })),
-    { id: 'fetch', label: 'Fetch', run: () => onAction('fetch') },
-    { id: 'branch', label: 'New branch', run: () => onAction('branch') },
-    { id: 'settings', label: 'Preferences', run: () => onAction('settings') }
+    ...recent.map((r) => ({ id: r.path, label: t('x.openNamed', { values: { name: r.name } }), run: () => onOpen(r.path, r.name) })),
+    { id: 'fetch', label: t('Fetch'), run: () => onAction('fetch') },
+    { id: 'branch', label: t('New branch'), run: () => onAction('branch') },
+    { id: 'settings', label: t('Preferences'), run: () => onAction('settings') }
   ].filter((i) => i.label.toLowerCase().includes(q.toLowerCase()))
   const [idx, setIdx] = useState(0)
   return (
@@ -5489,7 +5532,7 @@ function QuickLaunch({
       <div className="quick" onMouseDown={(e) => e.stopPropagation()}>
         <input
           autoFocus
-          placeholder="Quick Launch"
+          placeholder={t('Quick Launch')}
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => {

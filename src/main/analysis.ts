@@ -1,10 +1,11 @@
 import type { ChangeAnalysis, ChangeBriefFile, PlannedCommit } from '../shared/types'
+import { mt } from './i18n'
 
 export function parseAnalysis(text: string, knownFiles: string[]): ChangeAnalysis {
   const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/```$/i, '').trim()
   const start = cleaned.indexOf('{')
   const end = cleaned.lastIndexOf('}')
-  if (start < 0 || end <= start) throw new Error('The analysis was not JSON.')
+  if (start < 0 || end <= start) throw new Error(mt('The analysis was not JSON.'))
   const data = JSON.parse(cleaned.slice(start, end + 1)) as {
     summary?: string
     commits?: { subject?: string; body?: string; files?: unknown; rationale?: string }[]
@@ -27,15 +28,15 @@ export function parseAnalysis(text: string, knownFiles: string[]): ChangeAnalysi
   const left = knownFiles.map(normalizePath).filter((file) => !used.has(file))
   if (left.length) {
     commits.push({
-      subject: 'chore: include remaining changes',
+      subject: mt('chore: include remaining changes'),
       body: '',
       files: left,
-      rationale: 'Files the analysis did not assign.'
+      rationale: mt('Files the analysis did not assign.')
     })
   }
-  if (!commits.length) throw new Error('The analysis did not name any commits.')
+  if (!commits.length) throw new Error(mt('The analysis did not name any commits.'))
   return {
-    summary: (data.summary ?? '').trim() || `${commits.length} proposed commit${commits.length === 1 ? '' : 's'}.`,
+    summary: (data.summary ?? '').trim() || mt('x.proposedCommits', { count: commits.length }),
     commits
   }
 }
@@ -53,15 +54,20 @@ export function fallbackAnalysis(files: ChangeBriefFile[]): ChangeAnalysis {
     subject: subjectFor(key, list),
     body: list.map((file) => `- ${file.status} ${normalizePath(file.path)}`).join('\n'),
     files: list.map((file) => normalizePath(file.path)),
-    rationale: key === 'root' ? 'Files at the repository root.' : `Changes under ${key}.`
+    rationale: key === 'root' ? mt('Files at the repository root.') : mt('x.changesUnder', { values: { path: key } })
   }))
   return {
-    summary: `${files.length} changed file${files.length === 1 ? '' : 's'} in ${commits.length} group${commits.length === 1 ? '' : 's'}, split by folder.`,
+    summary: mt('x.changedFilesInGroups', { values: { files: files.length, groups: commits.length } }),
     commits
   }
 }
 
+/** English source text; the translation is looked up per locale. */
 const ORDER_NOTE = 'Adjusted so each commit stays valid on top of the previous one.'
+
+function orderNote(): string {
+  return mt(ORDER_NOTE)
+}
 
 /** Files that must land in the same commit or an earlier one, so a later commit cannot break the previous tree. */
 export function fileDependencies(files: ChangeBriefFile[]): Map<string, string[]> {
@@ -125,7 +131,7 @@ export function repairCommitOrder(analysis: ChangeAnalysis, files: ChangeBriefFi
       }
     }
   }
-  const note = 'Includes changes required for this commit to stay valid.'
+  const note = mt('Includes changes required for this commit to stay valid.')
   for (const index of grown) {
     if (!commits[index].files.length) continue
     if (!commits[index].rationale.includes(note)) {
@@ -141,9 +147,10 @@ export function repairCommitOrder(analysis: ChangeAnalysis, files: ChangeBriefFi
 }
 
 function withOrderNote(summary: string): string {
-  if (summary.includes(ORDER_NOTE)) return summary
+  const note = orderNote()
+  if (summary.includes(note)) return summary
   const base = summary.trim()
-  return base ? `${base.endsWith('.') ? base : `${base}.`} ${ORDER_NOTE}` : ORDER_NOTE
+  return base ? `${base.endsWith('.') ? base : `${base}.`} ${note}` : note
 }
 
 function isDeleted(status: string): boolean {

@@ -78,6 +78,7 @@ API keys and OAuth tokens stay on this machine (`%APPDATA%\spoon\spoon.json`). T
 
 **Desktop**
 - Light, dark, or match Windows
+- English and Simplified Chinese (Preferences → Appearance → Language)
 - Frosted glass on the toolbar and sidebar (intensity in Preferences)
 - Drag to resize every panel
 - Interactive tour on first launch

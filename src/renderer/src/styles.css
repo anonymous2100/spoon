@@ -2258,6 +2258,25 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
   display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
   margin: 6px 0 14px;
 }
+
+.language-row {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch;
+  margin: 6px 0 10px;
+}
+.language-card {
+  display: flex; flex-direction: column; gap: 2px; align-items: flex-start;
+  min-width: 150px; padding: 9px 12px; text-align: left;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-radius: 10px; background: var(--panel, transparent);
+  transition: border-color 0.16s ease, background 0.16s ease;
+}
+.language-card strong { font-size: 13px; }
+.language-card .hint { margin: 0; font-size: 11px; line-height: 1.35; }
+.language-card:hover { border-color: var(--accent); }
+.language-card.on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
 .accent-swatch {
   width: 28px; height: 28px; border-radius: 999px; padding: 0;
   border: 2px solid color-mix(in srgb, var(--border) 70%, transparent);

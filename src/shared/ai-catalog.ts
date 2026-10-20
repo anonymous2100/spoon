@@ -1,3 +1,4 @@
+import type { TranslateFn } from './i18n'
 import type { AiEndpointConfig } from './types'
 
 export type { AiEndpointConfig }
@@ -151,6 +152,12 @@ export const AI_SITE_CATALOG: AiEndpointConfig[] = [
 
 export function findAiSite(id: string): AiEndpointConfig | undefined {
   return AI_SITE_CATALOG.find((site) => site.id === id)
+}
+
+/** Translate the description of a built-in AI site. Brand names stay as they are. */
+export function aiSiteBlurb(id: string, t: TranslateFn): string {
+  const site = findAiSite(id)
+  return site?.blurb ? t(site.blurb) : ''
 }
 
 export function openAiUrl(baseUrl: string, path: 'chat/completions' | 'models'): string {

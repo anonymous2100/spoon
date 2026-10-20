@@ -20,6 +20,9 @@ registerHooks({
       if (!/\.[cm]?[jt]sx?$/.test(specifier.split('?')[0])) {
         const candidate = new URL(specifier + '.ts', context.parentURL)
         if (existsSync(candidate)) return { url: candidate.href, shortCircuit: true }
+        // A directory import resolves to its index file, the way Node ESM does.
+        const index = new URL(specifier.replace(/\/$/, '') + '/index.ts', context.parentURL)
+        if (existsSync(index)) return { url: index.href, shortCircuit: true }
       }
     }
     return nextResolve(specifier, context)

@@ -4,6 +4,8 @@ import {
   HISTORY_DAYS,
   contributionBuckets,
   contributionLevel,
+  contributionScaleLabel,
+  contributionScaleRange,
   contributionWeeks,
   dayKey,
   monthMarks,
@@ -15,25 +17,43 @@ import type { ActivityProgress, ActivityReport, RepoActivity, RepoOverview, Repo
 import { Button } from './Button'
 import { IcoBranch, IcoClone, IcoHome } from './icons'
 import { avatarColor, formatAgo, initials } from './lib'
+import { t, useLocale, useT } from './i18n'
 
 /** Activity survives Home remounts; the main process re-validates it against each repo's state. */
 const activityMemo: { rows: RepoActivity[] | null; key: string } = { rows: null, key: '' }
 
-const DOW = ['', 'Mon', '', 'Wed', '', 'Fri', '']
+const DOW = ['', 'x.dayMon', '', 'x.dayWed', '', 'x.dayFri', '']
 
 type DayStat = { count: number; repos: { path: string; name: string; count: number }[] }
 
-function prettyDay(key: string): string {
+/** Long date label, e.g. "Monday, March 3" — formatted in the app language, not the system one. */
+function prettyDay(key: string, locale: string): string {
   const [year, month, day] = key.split('-').map(Number)
-  return new Date(year, (month || 1) - 1, day || 1).toLocaleDateString(undefined, {
+  return new Date(year, (month || 1) - 1, day || 1).toLocaleDateString(locale, {
     weekday: 'long',
     month: 'long',
     day: 'numeric'
   })
 }
 
-function noun(count: number): string {
-  return `${count.toLocaleString()} contribution${count === 1 ? '' : 's'}`
+/**
+ * Bucket captions.
+ *
+ * `src/shared/activity.ts` formats the bucket label/title with the locale it is given, so the
+ * captions already follow the language pack. The week title stays an English template
+ * ("the week of {date}"), so the wording is translated here.
+ */
+function bucketTitle(bucket: ContributionBucket, locale: string): string {
+  if (bucket.key.length === 4) return bucket.key
+  if (bucket.key.includes('-')) {
+    // Week bucket: the shared title is `the week of <date>`.
+    return t('x.weekOf', {
+      values: {
+        day: bucket.from.toLocaleDateString(locale, { month: 'long', day: 'numeric' })
+      }
+    })
+  }
+  return bucket.title
 }
 
 function statsBetween(byDay: Map<string, DayStat>, from: Date, to: Date): DayStat {
@@ -83,6 +103,8 @@ export function RecentWork({
   onOpen: (path: string, name?: string) => void
   onClone: () => void
 }) {
+  const t = useT()
+  const locale = useLocale()
   const today = useMemo(() => {
     const date = new Date()
     date.setHours(0, 0, 0, 0)
@@ -97,9 +119,9 @@ export function RecentWork({
   }, [today])
   const weeks = useMemo(() => contributionWeeks(today, HISTORY_DAYS), [today])
   const sparkWeeks = useMemo(() => weeks.slice(-16), [weeks])
-  const months = useMemo(() => monthMarks(weeks), [weeks])
-  const buckets = useMemo(() => contributionBuckets(scale, today), [scale, today])
-  const range = CONTRIBUTION_SCALES.find((item) => item.id === scale)?.range ?? 'the last 30 days'
+  const months = useMemo(() => monthMarks(weeks, locale), [weeks, locale])
+  const buckets = useMemo(() => contributionBuckets(scale, today, locale), [scale, today, locale])
+  const rangeLabel = contributionScaleRange(scale, t)
   const opened = useMemo(
     () =>
       [...recent]
@@ -218,14 +240,20 @@ export function RecentWork({
   const focusBucket = buckets.find((bucket) => bucket.key === focusKey)
   const currentName = pending.length ? names.get(pending[0]) : undefined
   const summary = !opened.length
-    ? `Open a repository and ${range} will show up here.`
+    ? t('x.activityEmpty', { values: { range: rangeLabel } })
     : loading
-      ? `Reading ${currentName || 'repositories'}… ${opened.length - pending.length} of ${opened.length}`
+      ? t('x.activityLoading', {
+          values: { name: currentName || t('repositories'), done: opened.length - pending.length, total: opened.length }
+        })
       : focusKey
-        ? `${noun(focusStat?.count ?? 0)} ${scale === 'day' ? `on ${prettyDay(focusKey)}` : `in ${focusBucket?.title ?? focusKey}`}`
+        ? scale === 'day'
+          ? t('x.activityOnDay', { values: { count: focusStat?.count ?? 0, day: prettyDay(focusKey, locale) } })
+          : t('x.activityInBucket', {
+              values: { count: focusStat?.count ?? 0, bucket: focusBucket ? bucketTitle(focusBucket, locale) : focusKey }
+            })
         : scale === 'day'
-          ? `${noun(history.count)} in the last year`
-          : `${noun(covered.count)} in ${range}`
+          ? t('x.activityInLastYear', { values: { count: history.count } })
+          : t('x.activityInRange', { values: { count: covered.count, range: rangeLabel } })
 
   const shown = useMemo(() => {
     if (!picked) return opened
@@ -246,19 +274,19 @@ export function RecentWork({
   }
 
   return (
-    <section className="home-card recent-work" aria-label="Recent activity" aria-busy={loading}>
+    <section className="home-card recent-work" aria-label={t('Recent activity')} aria-busy={loading}>
       <div className="home-card-head">
         <div className="home-card-title">
-          <h2>Activity</h2>
+          <h2>{t('Activity')}</h2>
           <p className="home-card-sub" aria-live="polite">{summary}</p>
         </div>
         <div className="recent-work-tools">
           {picked && (
             <Button variant="link" className="recent-clear" onClick={() => setPicked(null)}>
-              Show all
+              {t('Show all')}
             </Button>
           )}
-          <div className="home-seg span-switch" role="group" aria-label="Group contributions">
+          <div className="home-seg span-switch" role="group" aria-label={t('Group contributions')}>
             {CONTRIBUTION_SCALES.map((item) => (
               <Button
                 key={item.id}
@@ -267,7 +295,7 @@ export function RecentWork({
                 aria-pressed={scale === item.id}
                 onClick={() => chooseScale(item.id)}
               >
-                {item.label}
+                {contributionScaleLabel(item.id, t)}
               </Button>
             ))}
           </div>
@@ -308,18 +336,18 @@ export function RecentWork({
         )}
         <div className="contrib-foot">
           <span className="contrib-legend" aria-hidden="true">
-            <span>Less</span>
+            <span>{t('Less')}</span>
             {[0, 1, 2, 3, 4].map((level) => (
               <i key={level} className={`contrib-day lv-${level}`} />
             ))}
-            <span>More</span>
+            <span>{t('More')}</span>
           </span>
         </div>
       </div>
       {shown.length > 0 && (
         <>
           <div className="recent-list-head">
-            <span>{picked ? 'Active in this period' : 'Recently opened'}</span>
+            <span>{picked ? t('Active in this period') : t('Recently opened')}</span>
             <span className="counter">{shown.length}</span>
           </div>
           <div className="recent-repos" ref={listRef} role="list">
@@ -360,12 +388,12 @@ export function RecentWork({
                     </div>
                   </div>
                   <DayStrip weeks={sparkWeeks} today={today} days={daysByPath.get(repo.path)} />
-                  <span className="opened">{repo.lastOpened ? formatAgo(repo.lastOpened) : 'never'}</span>
+                  <span className="opened">{repo.lastOpened ? formatAgo(repo.lastOpened) : t('never')}</span>
                   <Button
                     variant={local ? 'secondary' : 'secondary'}
                     className="recent-go"
-                    aria-label={local ? `Open ${repo.name}` : `Clone ${repo.name}`}
-                    title={local ? 'Open in Spoon' : 'Clone'}
+                    aria-label={local ? t('x.openRepoNamed', { values: { name: repo.name } }) : t('x.cloneRepoNamed', { values: { name: repo.name } })}
+                    title={local ? t('Open in Spoon') : t('Clone')}
                     onClick={(event) => {
                       event.stopPropagation()
                       if (local) onOpen(repo.path, repo.name)
@@ -373,7 +401,7 @@ export function RecentWork({
                     }}
                   >
                     {local ? <IcoHome /> : <IcoClone />}
-                    {local ? 'Open' : 'Clone'}
+                    {local ? t('Open') : t('Clone')}
                   </Button>
                 </div>
               )
@@ -382,7 +410,7 @@ export function RecentWork({
         </>
       )}
       {picked && opened.length > 0 && !shown.length && !loading && (
-        <p className="recent-empty">No commits in these repositories for that period.</p>
+        <p className="recent-empty">{t('No commits in these repositories for that period.')}</p>
       )}
     </section>
   )
@@ -407,6 +435,8 @@ function DayGrid({
   onHover: (key: string | null) => void
   onPick: (key: string | null) => void
 }) {
+  const t = useT()
+  const locale = useLocale()
   const style = { '--weeks': weeks.length } as CSSProperties
   return (
     <div className="contrib-scroll">
@@ -421,7 +451,7 @@ function DayGrid({
         {DOW.map((label, index) =>
           label ? (
             <span key={label} className="contrib-dow" style={{ gridRow: index + 2 }}>
-              {label}
+              {t(label)}
             </span>
           ) : null
         )}
@@ -433,7 +463,7 @@ function DayGrid({
               return <span key={key} className="contrib-day pad" style={place} />
             }
             const count = byDay.get(key)?.count ?? 0
-            const label = `${noun(count)} on ${prettyDay(key)}`
+            const label = t('x.contributionsOnDay', { values: { count, day: prettyDay(key, locale) } })
             return (
               <button
                 key={key}
@@ -458,6 +488,8 @@ function DayGrid({
 }
 
 function DayStrip({ weeks, today, days }: { weeks: Date[][]; today: Date; days?: Record<string, number> }) {
+  const t = useT()
+  const locale = useLocale()
   return (
     <div className="day-strip">
       {weeks.map((week, weekIndex) => (
@@ -466,7 +498,7 @@ function DayStrip({ weeks, today, days }: { weeks: Date[][]; today: Date; days?:
             const key = dayKey(date)
             if (date.getTime() > today.getTime()) return <span key={key} className="contrib-day pad" />
             const count = days?.[key] ?? 0
-            const label = `${noun(count)} on ${prettyDay(key)}`
+            const label = t('x.contributionsOnDay', { values: { count, day: prettyDay(key, locale) } })
             return <span key={key} className={`contrib-day lv-${contributionLevel(count)}`} title={label} />
           })}
         </div>
@@ -476,24 +508,25 @@ function DayStrip({ weeks, today, days }: { weeks: Date[][]; today: Date; days?:
 }
 
 function RecentBadges({ overview, analyzing }: { overview?: RepoOverview; analyzing?: boolean }) {
+  const t = useT()
   if (!overview) {
     return (
       <span className="badges">
-        <span className={`chip${analyzing ? ' working' : ''}`}>{analyzing ? 'Analyzing...' : 'Waiting...'}</span>
+        <span className={`chip${analyzing ? ' working' : ''}`}>{analyzing ? t('Analyzing...') : t('Waiting...')}</span>
       </span>
     )
   }
   const bits: { key: string; label: string; cls: string }[] = []
-  if (!overview.exists) bits.push({ key: 'miss', label: 'not local', cls: 'err' })
-  else if (overview.unsafe) bits.push({ key: 'unsafe', label: 'unsafe', cls: 'err' })
-  else if (overview.error) bits.push({ key: 'err', label: 'error', cls: 'err' })
+  if (!overview.exists) bits.push({ key: 'miss', label: t('not local'), cls: 'err' })
+  else if (overview.unsafe) bits.push({ key: 'unsafe', label: t('unsafe'), cls: 'err' })
+  else if (overview.error) bits.push({ key: 'err', label: t('error'), cls: 'err' })
   if (overview.operation) bits.push({ key: 'op', label: overview.operation, cls: 'warn' })
-  if (overview.conflicts) bits.push({ key: 'c', label: `${overview.conflicts} conflict`, cls: 'err' })
+  if (overview.conflicts) bits.push({ key: 'c', label: t('x.conflictsCount', { count: overview.conflicts }), cls: 'err' })
   const dirty = overview.staged + overview.unstaged + overview.untracked
-  if (dirty) bits.push({ key: 'd', label: `${dirty} changed`, cls: 'warn' })
-  if (overview.behind) bits.push({ key: 'b', label: `${overview.behind} behind`, cls: 'info' })
-  if (overview.ahead) bits.push({ key: 'a', label: `${overview.ahead} ahead`, cls: 'info' })
-  if (!bits.length) bits.push({ key: 'ok', label: 'clean', cls: 'ok' })
+  if (dirty) bits.push({ key: 'd', label: t('x.changedCount', { count: dirty }), cls: 'warn' })
+  if (overview.behind) bits.push({ key: 'b', label: t('x.behindCount', { count: overview.behind }), cls: 'info' })
+  if (overview.ahead) bits.push({ key: 'a', label: t('x.aheadCount', { count: overview.ahead }), cls: 'info' })
+  if (!bits.length) bits.push({ key: 'ok', label: t('clean'), cls: 'ok' })
   return (
     <span className="badges">
       {bits.map((bit) => (
@@ -520,11 +553,14 @@ function BucketRow({
   onHover: (key: string | null) => void
   onPick: (key: string | null) => void
 }) {
+  const t = useT()
+  const locale = useLocale()
   return (
     <div className="contrib-buckets wide" onMouseLeave={() => onHover(null)}>
       {buckets.map((bucket) => {
         const count = stats.get(bucket.key)?.count ?? 0
-        const label = `${noun(count)} in ${bucket.title}`
+        const title = bucketTitle(bucket, locale)
+        const label = t('x.contributionsInBucket', { values: { count, bucket: title } })
         return (
           <button
             key={bucket.key}

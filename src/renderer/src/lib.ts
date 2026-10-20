@@ -1,4 +1,6 @@
 import type { CommitInfo } from '../../shared/types'
+import { launcherKindLabel, LAUNCHER_KIND_ORDER, type LauncherKind } from '../../shared/launchers'
+import { t } from './i18n'
 
 let menuUnsub: (() => void) | null = null
 
@@ -17,23 +19,20 @@ export function openWithMenuItems(
   opts?: { defaultId?: string; prefix?: string }
 ): object[] {
   const prefix = opts?.prefix ?? 'open:'
-  const kindOrder = ['ide', 'agent', 'cli', 'system'] as const
-  const kindLabel: Record<string, string> = {
-    ide: 'IDE',
-    agent: 'Agent',
-    cli: 'CLI',
-    system: 'System'
-  }
+  const kindOrder = LAUNCHER_KIND_ORDER
   const available = launchers.filter((item) => item.available)
   const items: object[] = []
   for (const kind of kindOrder) {
     const rows = available.filter((item) => item.kind === kind)
     if (!rows.length) continue
     items.push({
-      label: kindLabel[kind],
+      label: launcherKindLabel(kind as LauncherKind, t),
       submenu: rows.map((item) => ({
         id: `${prefix}${item.id}`,
-        label: item.id === opts?.defaultId ? `${item.label} (default)` : item.label
+        label:
+          item.id === opts?.defaultId
+            ? t('x.launcherDefault', { values: { name: item.label } })
+            : item.label
       }))
     })
   }
@@ -106,26 +105,41 @@ export function avatarColor(seed: string): string {
   return colors[h % colors.length]
 }
 
+/** Month abbreviations come from the catalog so tooltips follow the active language. */
+const MONTH_KEYS = [
+  'x.monthJan',
+  'x.monthFeb',
+  'x.monthMar',
+  'x.monthApr',
+  'x.monthMay',
+  'x.monthJun',
+  'x.monthJul',
+  'x.monthAug',
+  'x.monthSep',
+  'x.monthOct',
+  'x.monthNov',
+  'x.monthDec'
+]
+
 export function formatDate(ms: number): string {
   const d = new Date(ms)
   const pad = (n: number) => String(n).padStart(2, '0')
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  return `${pad(d.getDate())} ${months[d.getMonth()]} ${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return `${pad(d.getDate())} ${t(MONTH_KEYS[d.getMonth()])} ${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 export function formatAgo(ms: number): string {
   const s = Math.max(1, Math.round((Date.now() - ms) / 1000))
-  if (s < 60) return `${s} seconds ago`
+  if (s < 60) return t('x.secondsAgo', { count: s })
   const m = Math.round(s / 60)
-  if (m < 60) return `${m} minute${m === 1 ? '' : 's'} ago`
+  if (m < 60) return t('x.minutesAgo', { count: m })
   const h = Math.round(m / 60)
-  if (h < 24) return `${h} hour${h === 1 ? '' : 's'} ago`
+  if (h < 24) return t('x.hoursAgo', { count: h })
   const d = Math.round(h / 24)
-  if (d < 30) return `${d} day${d === 1 ? '' : 's'} ago`
+  if (d < 30) return t('x.daysAgo', { count: d })
   const mo = Math.round(d / 30)
-  if (mo < 12) return `${mo} month${mo === 1 ? '' : 's'} ago`
+  if (mo < 12) return t('x.monthsAgo', { count: mo })
   const y = Math.round(mo / 12)
-  return `${y} year${y === 1 ? '' : 's'} ago`
+  return t('x.yearsAgo', { count: y })
 }
 
 export function fileName(path: string): string {

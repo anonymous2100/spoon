@@ -21,6 +21,7 @@ import type {
   BulkResult,
   CommitOptions,
   FetchOptions,
+  LocaleId,
   PullOptions,
   PushOptions,
   RebaseTodoItem,
@@ -38,6 +39,7 @@ import * as launchers from './launchers'
 import * as profile from './profile'
 import { mapIndexLine } from '../shared/change-location'
 import { listProviderModels } from './model-catalog'
+import { mt, setActiveLocale } from './i18n'
 
 app.commandLine.appendSwitch('disable-gpu-sandbox')
 app.setAppUserModelId('com.spoon.git')
@@ -177,7 +179,7 @@ function createWindow(): void {
   mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
     void dialog.showMessageBox(mainWindow!, {
       type: 'error',
-      message: 'Spoon failed to load the UI',
+      message: mt('Spoon failed to load the UI'),
       detail: `${code} ${desc}\n${url}`
     })
   })
@@ -205,6 +207,17 @@ function send(channel: string, ...args: unknown[]): void {
   mainWindow?.webContents.send(channel, ...args)
 }
 
+/**
+ * Switch the main process to a locale and rebuild the application menu, so the native menu bar
+ * follows the language the user picked.
+ */
+function applyLocale(locale: LocaleId): void {
+  setActiveLocale(locale)
+  buildMenu()
+  // Let the renderer know so it can re-render every translated string.
+  send('locale', locale)
+}
+
 function pushActivity(item: (typeof activity)[number]): void {
   activity.unshift(item)
   if (activity.length > 80) activity.pop()
@@ -218,7 +231,7 @@ async function withActivity<T>(title: string, command: string, fn: () => Promise
   try {
     const result = await fn()
     item.status = 'ok'
-    item.output = typeof result === 'string' ? result : (result as { stdout?: string })?.stdout || 'Done'
+    item.output = typeof result === 'string' ? result : (result as { stdout?: string })?.stdout || mt('Done')
     pushActivity({ ...item })
     return result
   } catch (err) {
@@ -251,30 +264,30 @@ async function bulk(action: BulkAction, paths: string[]): Promise<BulkResult[]> 
 
 async function bulkOne(action: BulkAction, path: string, name: string): Promise<BulkResult> {
   const skip = (message: string): BulkResult => ({ path, name, ok: true, skipped: true, message })
-  if (!existsSync(path)) return { path, name, ok: false, message: 'Folder not found' }
-  if (action === 'refresh') return { path, name, ok: true, message: 'Refreshed' }
+  if (!existsSync(path)) return { path, name, ok: false, message: mt('Folder not found') }
+  if (action === 'refresh') return { path, name, ok: true, message: mt('Refreshed') }
   if (action === 'fetch') {
     const remotes = await git.getRemotes(path)
-    if (!remotes.length) return skip('No remote')
+    if (!remotes.length) return skip(mt('No remote'))
     await git.fetchRemote(path, { all: true, prune: true })
-    return { path, name, ok: true, message: 'Fetched' }
+    return { path, name, ok: true, message: mt('Fetched') }
   }
   const o = await git.overview(path)
   if (o.error) return { path, name, ok: false, message: o.error }
-  if (o.operation) return skip(`${o.operation} in progress`)
-  if (o.detached) return skip('Detached HEAD')
-  if (!o.upstream) return skip('No upstream')
+  if (o.operation) return skip(mt('x.operationInProgress', { values: { operation: o.operation } }))
+  if (o.detached) return skip(mt('Detached HEAD'))
+  if (!o.upstream) return skip(mt('No upstream'))
   if (action === 'pull') {
-    if (!o.behind) return skip('Up to date')
-    if (o.staged + o.unstaged + o.conflicts > 0) return skip('Has local changes')
-    if (o.ahead) return skip('Diverged, pull it manually')
+    if (!o.behind) return skip(mt('Up to date'))
+    if (o.staged + o.unstaged + o.conflicts > 0) return skip(mt('Has local changes'))
+    if (o.ahead) return skip(mt('Diverged, pull it manually'))
     await git.git(path, ['pull', '--ff-only'])
-    return { path, name, ok: true, message: `Pulled ${o.behind} commit(s)` }
+    return { path, name, ok: true, message: mt('x.pulledCommits', { count: o.behind }) }
   }
-  if (!o.ahead) return skip('Nothing to push')
-  if (o.behind) return skip('Behind remote, pull first')
+  if (!o.ahead) return skip(mt('Nothing to push'))
+  if (o.behind) return skip(mt('Behind remote, pull first'))
   await git.git(path, ['push'])
-  return { path, name, ok: true, message: `Pushed ${o.ahead} commit(s)` }
+  return { path, name, ok: true, message: mt('x.pushedCommits', { count: o.ahead }) }
 }
 
 async function openIn(path: string, target: 'editor' | 'terminal' | 'explorer'): Promise<string> {
@@ -352,23 +365,23 @@ function buildMenu(): void {
   const sendMenu = (action: string) => send('menu', action)
   const template: Electron.MenuItemConstructorOptions[] = [
     {
-      label: 'File',
+      label: mt('File'),
       submenu: [
-        { label: 'New Tab', accelerator: 'Ctrl+N', click: () => sendMenu('manager') },
+        { label: mt('New Tab'), accelerator: 'Ctrl+N', click: () => sendMenu('manager') },
         { type: 'separator' },
-        { label: 'Clone Repository…', accelerator: 'Ctrl+Shift+N', click: () => sendMenu('clone') },
-        { label: 'Open Repository…', accelerator: 'Ctrl+O', click: () => sendMenu('open') },
-        { label: 'Create New Repository…', click: () => sendMenu('init') },
+        { label: mt('Clone Repository…'), accelerator: 'Ctrl+Shift+N', click: () => sendMenu('clone') },
+        { label: mt('Open Repository…'), accelerator: 'Ctrl+O', click: () => sendMenu('open') },
+        { label: mt('Create New Repository…'), click: () => sendMenu('init') },
         { type: 'separator' },
-        { label: 'Scan Folders for Repositories…', click: () => sendMenu('scan') },
+        { label: mt('Scan Folders for Repositories…'), click: () => sendMenu('scan') },
         { type: 'separator' },
-        { label: 'Preferences…', accelerator: 'Ctrl+,', click: () => sendMenu('settings') },
+        { label: mt('Preferences…'), accelerator: 'Ctrl+,', click: () => sendMenu('settings') },
         { type: 'separator' },
-        { role: 'quit', label: 'Exit' }
+        { role: 'quit', label: mt('Exit') }
       ]
     },
     {
-      label: 'Edit',
+      label: mt('Edit'),
       submenu: [
         { role: 'undo' },
         { role: 'redo' },
@@ -380,15 +393,15 @@ function buildMenu(): void {
       ]
     },
     {
-      label: 'View',
+      label: mt('View'),
       submenu: [
-        { label: 'Quick Launch', accelerator: 'Ctrl+P', click: () => sendMenu('quick') },
-        { label: 'Command Palette', accelerator: 'Ctrl+K', click: () => sendMenu('quick') },
-        { label: 'Home', accelerator: 'Ctrl+H', click: () => sendMenu('home') },
-        { label: 'Changes', accelerator: 'Ctrl+1', click: () => sendMenu('changes') },
-        { label: 'History', accelerator: 'Ctrl+2', click: () => sendMenu('commits') },
+        { label: mt('Quick Launch'), accelerator: 'Ctrl+P', click: () => sendMenu('quick') },
+        { label: mt('Command Palette'), accelerator: 'Ctrl+K', click: () => sendMenu('quick') },
+        { label: mt('Home'), accelerator: 'Ctrl+H', click: () => sendMenu('home') },
+        { label: mt('Changes'), accelerator: 'Ctrl+1', click: () => sendMenu('changes') },
+        { label: mt('History'), accelerator: 'Ctrl+2', click: () => sendMenu('commits') },
         { type: 'separator' },
-        { label: 'Toggle Theme', click: () => sendMenu('theme') },
+        { label: mt('Toggle Theme'), click: () => sendMenu('theme') },
         { type: 'separator' },
         { role: 'reload' },
         { role: 'toggleDevTools' },
@@ -399,60 +412,60 @@ function buildMenu(): void {
       ]
     },
     {
-      label: 'Repository',
+      label: mt('Repository'),
       submenu: [
-        { label: 'Fetch', accelerator: 'Ctrl+Shift+F', click: () => sendMenu('fetch') },
-        { label: 'Pull', accelerator: 'Ctrl+Shift+L', click: () => sendMenu('pull') },
-        { label: 'Push', accelerator: 'Ctrl+Shift+P', click: () => sendMenu('push') },
+        { label: mt('Fetch'), accelerator: 'Ctrl+Shift+F', click: () => sendMenu('fetch') },
+        { label: mt('Pull'), accelerator: 'Ctrl+Shift+L', click: () => sendMenu('pull') },
+        { label: mt('Push'), accelerator: 'Ctrl+Shift+P', click: () => sendMenu('push') },
         { type: 'separator' },
-        { label: 'Commit', accelerator: 'Ctrl+Enter', click: () => sendMenu('commit') },
-        { label: 'Commit & Push', accelerator: 'Ctrl+Shift+Enter', click: () => sendMenu('commit-push') },
+        { label: mt('Commit'), accelerator: 'Ctrl+Enter', click: () => sendMenu('commit') },
+        { label: mt('Commit & Push'), accelerator: 'Ctrl+Shift+Enter', click: () => sendMenu('commit-push') },
         { type: 'separator' },
         {
           label: 'AI',
           submenu: [
-            { label: 'Run AI Button', accelerator: 'Ctrl+Alt+Enter', click: () => sendMenu('ai-primary') },
+            { label: mt('Run AI Button'), accelerator: 'Ctrl+Alt+Enter', click: () => sendMenu('ai-primary') },
             { type: 'separator' },
-            { label: 'Write Message Only', accelerator: 'Ctrl+Alt+M', click: () => sendMenu('ai-fill') },
-            { label: 'Split & Commit', click: () => sendMenu('ai-commit') },
-            { label: 'Split, Commit & Push', accelerator: 'Ctrl+Alt+Shift+Enter', click: () => sendMenu('ai-commit-push') },
+            { label: mt('Write Message Only'), accelerator: 'Ctrl+Alt+M', click: () => sendMenu('ai-fill') },
+            { label: mt('Split & Commit'), click: () => sendMenu('ai-commit') },
+            { label: mt('Split, Commit & Push'), accelerator: 'Ctrl+Alt+Shift+Enter', click: () => sendMenu('ai-commit-push') },
             { type: 'separator' },
-            { label: 'Analyze Changes', accelerator: 'Ctrl+Alt+A', click: () => sendMenu('analyze') }
+            { label: mt('Analyze Changes'), accelerator: 'Ctrl+Alt+A', click: () => sendMenu('analyze') }
           ]
         },
         { type: 'separator' },
-        { label: 'New Branch…', accelerator: 'Ctrl+Shift+B', click: () => sendMenu('branch') },
-        { label: 'Stash', click: () => sendMenu('stash') },
+        { label: mt('New Branch…'), accelerator: 'Ctrl+Shift+B', click: () => sendMenu('branch') },
+        { label: mt('Stash'), click: () => sendMenu('stash') },
         { type: 'separator' },
-        { label: 'Health Check…', accelerator: 'Ctrl+Shift+H', click: () => sendMenu('health') },
-        { label: 'Open with Default', accelerator: 'Ctrl+Shift+E', click: () => sendMenu('open-editor') },
-        { label: 'Open in Terminal', accelerator: 'Ctrl+`', click: () => sendMenu('open-terminal') }
+        { label: mt('Health Check…'), accelerator: 'Ctrl+Shift+H', click: () => sendMenu('health') },
+        { label: mt('Open with Default'), accelerator: 'Ctrl+Shift+E', click: () => sendMenu('open-editor') },
+        { label: mt('Open in Terminal'), accelerator: 'Ctrl+`', click: () => sendMenu('open-terminal') }
       ]
     },
     {
-      label: 'Window',
+      label: mt('Window'),
       submenu: [{ role: 'minimize' }, { role: 'close' }]
     },
     {
-      label: 'Help',
+      label: mt('Help'),
       submenu: [
         {
-          label: 'Spoon on GitHub',
+          label: mt('Spoon on GitHub'),
           click: () => {
             void shell.openExternal('https://github.com/elgodox/spoon')
           }
         },
         {
-          label: 'Report an Issue',
+          label: mt('Report an Issue'),
           click: () => {
             void shell.openExternal('https://github.com/elgodox/spoon/issues')
           }
         },
         { type: 'separator' },
-        { label: 'Confetti!', accelerator: 'Ctrl+Shift+.', click: () => sendMenu('confetti') },
-        { label: 'Take the Tour', click: () => sendMenu('tour') },
-        { label: 'Check for Updates…', click: () => sendMenu('check-updates') },
-        { label: 'About Spoon', click: () => sendMenu('about') }
+        { label: mt('Confetti!'), accelerator: 'Ctrl+Shift+.', click: () => sendMenu('confetti') },
+        { label: mt('Take the Tour'), click: () => sendMenu('tour') },
+        { label: mt('Check for Updates…'), click: () => sendMenu('check-updates') },
+        { label: mt('About Spoon'), click: () => sendMenu('about') }
       ]
     }
   ]
@@ -464,10 +477,12 @@ function registerIpc(): void {
   ipcMain.handle('app:patchSettings', (_e, patch: Partial<Settings>) => {
     const settings = store.patchSettings(patch)
     if (patch.theme !== undefined || patch.themePack !== undefined) syncNativeTheme()
+    if (patch.locale !== undefined) applyLocale(settings.locale)
     if (patch.autoFetch !== undefined || patch.fetchIntervalMin !== undefined || patch.autoFetchAll !== undefined) scheduleFetch()
     if (patch.autoUpdate !== undefined) updater.schedule(settings.autoUpdate)
     return settings
   })
+  ipcMain.handle('app:locale', () => store.getSettings().locale)
   ipcMain.handle('app:recent', () => store.getRecent())
   ipcMain.handle('app:session', () => store.getSession())
   ipcMain.handle('app:saveSession', (_e, session) => store.saveSession(session))
@@ -604,9 +619,9 @@ function registerIpc(): void {
     if (fix === 'remove-missing') {
       unwatchRepo(path)
       store.removeRecent(path)
-      return 'Removed from the list'
+      return mt('Removed from the list')
     }
-    return withActivity('Repair', fix, () => git.applyFix(path, fix, input))
+    return withActivity(mt('Repair'), fix, () => git.applyFix(path, fix, input))
   })
   ipcMain.handle('repo:bulk', (_e, action: BulkAction, paths: string[]) => bulk(action, paths))
   ipcMain.handle('repo:rescan', async () => {
@@ -625,7 +640,7 @@ function registerIpc(): void {
   })
   ipcMain.handle('app:pickDirectories', async () => {
     const r = await dialog.showOpenDialog(mainWindow!, {
-      title: 'Choose folders to scan for Git repositories',
+      title: mt('Choose folders to scan for Git repositories'),
       properties: ['openDirectory', 'multiSelections']
     })
     return r.canceled ? null : r.filePaths
@@ -636,7 +651,7 @@ function registerIpc(): void {
   )
   ipcMain.handle('app:pickRepo', async () => {
     const r = await dialog.showOpenDialog(mainWindow!, {
-      title: 'Choose a Git repository or a folder of repositories',
+      title: mt('Choose a Git repository or a folder of repositories'),
       properties: ['openDirectory']
     })
     if (r.canceled) return null
@@ -651,8 +666,8 @@ function registerIpc(): void {
     if (!found.length) {
       await dialog.showMessageBox(mainWindow!, {
         type: 'warning',
-        message: 'No Git repositories in that folder.',
-        detail: 'Pick a repository, or a parent folder that contains repositories inside it.'
+        message: mt('No Git repositories in that folder.'),
+        detail: mt('Pick a repository, or a parent folder that contains repositories inside it.')
       })
       return null
     }
@@ -695,7 +710,7 @@ function registerIpc(): void {
   ipcMain.handle('git:isRepo', (_e, path: string) => git.isRepo(path))
   ipcMain.handle('git:open', async (_e, path: string) => {
     const info = await git.repoInfo(path)
-    if (!info) throw new Error('That folder is not a Git repository.')
+    if (!info) throw new Error(mt('That folder is not a Git repository.'))
     const root = info.root
     store.touchRepo(root, basename(root))
     watchRepo(root)
@@ -724,24 +739,24 @@ function registerIpc(): void {
     git.applyHunk(path, file, hunk, mode)
   )
   ipcMain.handle('git:commit', async (_e, path: string, opts: CommitOptions) => {
-    const out = await withActivity('Commit', 'git commit', () => git.commit(path, opts))
+    const out = await withActivity(mt('Commit'), 'git commit', () => git.commit(path, opts))
     store.pushRecentMessage(opts.message)
     return out
   })
   ipcMain.handle('git:fetch', (_e, path: string, opts: FetchOptions) =>
-    withActivity('Fetch', 'git fetch', () => git.fetchRemote(path, opts))
+    withActivity(mt('Fetch'), 'git fetch', () => git.fetchRemote(path, opts))
   )
   ipcMain.handle('git:pull', (_e, path: string, opts: PullOptions) =>
-    withActivity('Pull', 'git pull', () => git.pullRemote(path, opts))
+    withActivity(mt('Pull'), 'git pull', () => git.pullRemote(path, opts))
   )
   ipcMain.handle('git:push', (_e, path: string, opts: PushOptions) =>
-    withActivity('Push', 'git push', () => git.pushRemote(path, opts))
+    withActivity(mt('Push'), 'git push', () => git.pushRemote(path, opts))
   )
   ipcMain.handle('git:checkout', (_e, path: string, ref: string, create?: boolean) =>
-    withActivity('Checkout', `git checkout ${ref}`, () => git.checkout(path, ref, !!create))
+    withActivity(mt('Checkout'), `git checkout ${ref}`, () => git.checkout(path, ref, !!create))
   )
   ipcMain.handle('git:checkoutRemote', (_e, path: string, remoteRef: string) =>
-    withActivity('Checkout', `git checkout --track ${remoteRef}`, () => git.checkoutRemote(path, remoteRef))
+    withActivity(mt('Checkout'), `git checkout --track ${remoteRef}`, () => git.checkoutRemote(path, remoteRef))
   )
   ipcMain.handle('git:createBranch', (_e, path: string, name: string, checkout: boolean, start?: string) =>
     git.createBranch(path, name, checkout, start)
@@ -751,10 +766,10 @@ function registerIpc(): void {
   )
   ipcMain.handle('git:renameBranch', (_e, path: string, from: string, to: string) => git.renameBranch(path, from, to))
   ipcMain.handle('git:merge', (_e, path: string, ref: string, noFf: boolean, squash: boolean) =>
-    withActivity('Merge', `git merge ${ref}`, () => git.mergeBranch(path, ref, noFf, squash))
+    withActivity(mt('Merge'), `git merge ${ref}`, () => git.mergeBranch(path, ref, noFf, squash))
   )
   ipcMain.handle('git:rebase', (_e, path: string, ref: string) =>
-    withActivity('Rebase', `git rebase ${ref}`, () => git.rebaseOnto(path, ref))
+    withActivity(mt('Rebase'), `git rebase ${ref}`, () => git.rebaseOnto(path, ref))
   )
   ipcMain.handle('git:rebaseContinue', (_e, path: string) => git.rebaseContinue(path))
   ipcMain.handle('git:rebaseAbort', (_e, path: string) => git.rebaseAbort(path))
@@ -762,13 +777,13 @@ function registerIpc(): void {
     interactiveRebase(path, onto, todos)
   )
   ipcMain.handle('git:cherryPick', (_e, path: string, hashes: string[]) =>
-    withActivity('Cherry-pick', 'git cherry-pick', () => git.cherryPick(path, hashes))
+    withActivity(mt('Cherry-pick'), 'git cherry-pick', () => git.cherryPick(path, hashes))
   )
   ipcMain.handle('git:revert', (_e, path: string, hashes: string[]) =>
-    withActivity('Revert', 'git revert', () => git.revertCommits(path, hashes))
+    withActivity(mt('Revert'), 'git revert', () => git.revertCommits(path, hashes))
   )
   ipcMain.handle('git:reset', (_e, path: string, hash: string, mode: 'soft' | 'mixed' | 'hard') =>
-    withActivity('Reset', `git reset --${mode} ${hash.slice(0, 7)}`, () => git.resetTo(path, hash, mode))
+    withActivity(mt('Reset'), `git reset --${mode} ${hash.slice(0, 7)}`, () => git.resetTo(path, hash, mode))
   )
   ipcMain.handle('git:createTag', (_e, path: string, name: string, message?: string, hash?: string) =>
     git.createTag(path, name, message, hash)
@@ -799,7 +814,7 @@ function registerIpc(): void {
   })
   ipcMain.handle('git:openFileAt', async (_e, path: string, file: string, line = 1, launcherId?: string, staged = false) => {
     const abs = git.worktreeFile(path, file)
-    if (!Number.isFinite(line)) throw new Error('Invalid line number.')
+    if (!Number.isFinite(line)) throw new Error(mt('Invalid line number.'))
     if (staged) {
       const working = await git.getDiff(path, { path: file, staged: false })
       line = mapIndexLine(line, working.find((diff) => diff.path === file))
@@ -827,7 +842,7 @@ function registerIpc(): void {
   ipcMain.handle('git:stagedPatch', (_e, path: string) => git.getStagedPatch(path))
   ipcMain.handle('git:workingPatch', (_e, path: string) => git.getWorkingPatch(path))
   ipcMain.handle('git:clone', async (_e, opts) => {
-    const dest = await withActivity('Clone', `git clone ${opts.url}`, () =>
+    const dest = await withActivity(mt('Clone'), `git clone ${opts.url}`, () =>
       git.cloneRepo(opts, (line) => {
         send('clone:progress', line)
       })
@@ -951,7 +966,7 @@ async function interactiveRebase(cwd: string, onto: string, todos: RebaseTodoIte
   // Run the sequence editor with Spoon's own runtime: end users do not have Node.js installed.
   const runtime = process.execPath.replace(/\\/g, '/')
   try {
-    await withActivity('Interactive rebase', `git ${args.join(' ')}`, () =>
+    await withActivity(mt('Interactive rebase'), `git ${args.join(' ')}`, () =>
       git.git(cwd, args, {
         env: {
           ELECTRON_RUN_AS_NODE: '1',
@@ -967,7 +982,7 @@ async function interactiveRebase(cwd: string, onto: string, todos: RebaseTodoIte
 
 process.on('uncaughtException', (err) => {
   console.error(err)
-  dialog.showErrorBox('Spoon crashed', err.stack || err.message)
+  dialog.showErrorBox(mt('Spoon crashed'), err.stack || err.message)
 })
 
 app.whenReady().then(async () => {
@@ -978,6 +993,8 @@ app.whenReady().then(async () => {
     send('theme:native', nativeTheme.shouldUseDarkColors)
   })
   registerIpc()
+  // The menu is built in the user's language, so the locale has to be set first.
+  setActiveLocale(store.getSettings().locale)
   buildMenu()
   createWindow()
   const gitReady = git.findGit().catch(async (e) => {

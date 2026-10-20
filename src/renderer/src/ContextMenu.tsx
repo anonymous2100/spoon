@@ -1,10 +1,12 @@
 import { Button } from './Button'
 import { useLayoutEffect, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { useT } from './i18n'
 
 export interface ContextAction { label?: string; icon?: ReactNode; run?: () => void; disabled?: boolean; danger?: boolean }
 export interface ContextState { x: number; y: number; title: string; items: ContextAction[] }
 export function ContextMenu({ menu, onClose }: { menu: ContextState; onClose: () => void }) {
+  const t = useT()
   const ref = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
     const node = ref.current!
@@ -19,7 +21,7 @@ export function ContextMenu({ menu, onClose }: { menu: ContextState; onClose: ()
     window.addEventListener('blur', blur)
     return () => { document.removeEventListener('pointerdown', close); window.removeEventListener('blur', blur); if (document.activeElement === document.body || node.contains(document.activeElement)) previous?.focus() }
   }, [menu, onClose])
-  return createPortal(<div ref={ref} className="change-context-menu" role="menu" aria-label="File actions" onContextMenu={(e) => e.preventDefault()} onKeyDown={(e) => {
+  return createPortal(<div ref={ref} className="change-context-menu" role="menu" aria-label={t('File actions')} onContextMenu={(e) => e.preventDefault()} onKeyDown={(e) => {
     if (e.key === 'Escape' || e.key === 'Tab') { e.preventDefault(); onClose(); return }
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return
     e.preventDefault()

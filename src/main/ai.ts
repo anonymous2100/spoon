@@ -5,6 +5,7 @@ import { fallbackAnalysis, fileDependencies, parseAnalysis, repairCommitOrder } 
 import { changeBrief } from './git'
 import { providerLabel, resolveCreds } from './oauth'
 import { getSettings, type StoredAiCreds } from './store'
+import { mt } from './i18n'
 
 const SYSTEM = `You write Git commit messages for a desktop Git client.
 Rules:
@@ -58,7 +59,7 @@ export async function generateCommitMessage(
   model?: string
 ): Promise<string> {
   const snippet = diff.length > 24_000 ? diff.slice(0, 24_000) + '\n\n[diff truncated]' : diff
-  if (!snippet.trim()) throw new Error('Nothing to commit. Stage changes first.')
+  if (!snippet.trim()) throw new Error(mt('Nothing to commit. Stage changes first.'))
   const user = `Write a commit message for this diff.\n${extra ? `\nContext: ${extra}\n` : ''}\n${snippet}`
   return complete(provider, user, SYSTEM, undefined, model)
 }
@@ -79,7 +80,7 @@ export async function generateStashMessage(
   const all = await changeBrief(cwd)
   const wanted = paths?.length ? new Set(paths.map((p) => p.replace(/\\/g, '/'))) : null
   const files = wanted ? all.filter((file) => wanted.has(file.path)) : all
-  if (!files.length) throw new Error('No local changes to stash.')
+  if (!files.length) throw new Error(mt('No local changes to stash.'))
   const text = await complete(provider, `Name a stash holding these uncommitted changes.\n\n${briefListing(files, 12_000)}`, STASH_SYSTEM, 120, model)
   const line = text.split('\n').map((l) => l.trim()).find(Boolean) ?? ''
   return line.replace(/^["'`]+|["'`.]+$/g, '').slice(0, 72)
@@ -94,7 +95,7 @@ export async function analyzeRepository(
   const all = await changeBrief(cwd)
   const scoped = scope === 'staged' ? all.filter((file) => file.status.includes('staged')) : all
   if (!scoped.length) {
-    throw new Error(scope === 'staged' ? 'No staged changes to analyze.' : 'No local changes to analyze.')
+    throw new Error(scope === 'staged' ? mt('No staged changes to analyze.') : mt('No local changes to analyze.'))
   }
   const known = scoped.map((file) => file.path)
   const kind = scope === 'staged' ? 'staged' : 'uncommitted'
@@ -107,13 +108,12 @@ export async function analyzeRepository(
       1600,
       model
     )
-    analysis = parseAnalysis(text, known)
-  } catch (error) {
+    analysis = parseAnalysis(text, known)  } catch (error) {
     const fallback = fallbackAnalysis(scoped)
     const reason = error instanceof Error ? error.message : String(error)
     analysis = {
       ...fallback,
-      summary: `${fallback.summary} AI grouping was not used (${reason}).`
+      summary: mt('x.aiGroupingNotUsed', { values: { summary: fallback.summary, reason } })
     }
   }
   analysis = repairCommitOrder(analysis, all)
@@ -155,7 +155,7 @@ export async function analyzeWorkspaces(
   repos: Pick<RepoSummary, 'path' | 'name'>[],
   model?: string
 ): Promise<WorkspaceAnalysis> {
-  if (repos.length < 2) throw new Error('Add at least two repositories before analyzing workspaces.')
+  if (repos.length < 2) throw new Error(mt('Add at least two repositories before analyzing workspaces.'))
   const listing = repos
     .slice(0, 200)
     .map((repo) => {
@@ -167,13 +167,13 @@ export async function analyzeWorkspaces(
   const user = `Group these repositories into workspaces a developer would open together.\n\n${clipped}`
   try {
     const text = await complete(provider, user, WORKSPACE_SYSTEM, 1800, model)
-    return parseWorkspaceAnalysis(text, repos)
+    return parseWorkspaceAnalysis(text, repos, mt)
   } catch (error) {
-    const fallback = fallbackWorkspaceAnalysis(repos)
+    const fallback = fallbackWorkspaceAnalysis(repos, mt)
     const reason = error instanceof Error ? error.message : String(error)
     return {
       ...fallback,
-      summary: `${fallback.summary} AI grouping was not used (${reason}).`
+      summary: mt('x.aiGroupingNotUsed', { values: { summary: fallback.summary, reason } })
     }
   }
 }
@@ -199,7 +199,7 @@ async function complete(
   maxTokens?: number,
   model?: string
 ): Promise<string> {
-  if (provider === 'free') throw new Error('Connect an AI provider in Preferences → AI.')
+  if (provider === 'free') throw new Error(mt('Connect an AI provider in Preferences → AI.'))
   const creds = await resolveCreds(provider)
   if (provider === 'grok') return grokComplete(creds, user, system, maxTokens, model)
   if (provider === 'claude') return claudeComplete(creds, user, system, maxTokens ?? 400, model)
@@ -218,7 +218,7 @@ async function compatComplete(
   model = endpoint.defaultModel
 ): Promise<string> {
   const key = creds.apiKey || creds.accessToken
-  if (endpoint.needsKey && !key) throw new Error(`${endpoint.label} is not connected.`)
+  if (endpoint.needsKey && !key) throw new Error(mt('x.providerNotConnected', { values: { label: endpoint.label } }))
   const headers: Record<string, string> = {
     Accept: 'application/json',
     'Content-Type': 'application/json',
@@ -250,7 +250,7 @@ async function compatComplete(
   }
   const text = data.choices?.[0]?.message?.content?.trim()
   if (text) return cleanMessage(text)
-  throw new Error(`${endpoint.label} returned an empty response.`)
+  throw new Error(mt('x.emptyResponse', { values: { label: endpoint.label } }))
 }
 
 async function grokComplete(
@@ -261,7 +261,7 @@ async function grokComplete(
   model = 'grok-4.7'
 ): Promise<string> {
   const key = creds.apiKey || creds.accessToken
-  if (!key) throw new Error('Grok is not connected.')
+  if (!key) throw new Error(mt('Grok is not connected.'))
   const models = [model]
   let last = ''
   for (const model of models) {
@@ -281,7 +281,7 @@ async function grokComplete(
         ]
       })
     })
-    if (res.status === 404) throw new Error(`Grok model "${model}" is not available. Pick another model.`)
+    if (res.status === 404) throw new Error(mt('x.modelNotAvailable', { values: { label: 'Grok', model } }))
     const data = (await res.json()) as {
       error?: { message?: string }
       choices?: { message?: { content?: string } }[]
@@ -292,9 +292,9 @@ async function grokComplete(
     }
     const text = data.choices?.[0]?.message?.content?.trim()
     if (text) return cleanMessage(text)
-    last = 'Empty Grok response'
+    last = mt('Empty Grok response')
   }
-  throw new Error(last || 'Grok could not generate a commit message.')
+  throw new Error(last || mt('Grok could not generate a commit message.'))
 }
 
 async function chatgptComplete(
@@ -305,7 +305,7 @@ async function chatgptComplete(
   model = 'gpt-4o'
 ): Promise<string> {
   const key = creds.apiKey || creds.accessToken
-  if (!key) throw new Error('ChatGPT is not connected.')
+  if (!key) throw new Error(mt('ChatGPT is not connected.'))
   const models = [model]
   let last = ''
   for (const model of models) {
@@ -325,7 +325,7 @@ async function chatgptComplete(
         ]
       })
     })
-    if (res.status === 404) throw new Error(`ChatGPT model "${model}" is not available. Pick another model.`)
+    if (res.status === 404) throw new Error(mt('x.modelNotAvailable', { values: { label: 'ChatGPT', model } }))
     const data = (await res.json()) as {
       error?: { message?: string }
       choices?: { message?: { content?: string } }[]
@@ -334,7 +334,7 @@ async function chatgptComplete(
       last = data.error?.message || res.statusText
       if (res.status === 401 || res.status === 403) {
         throw new Error(
-          `${last} ChatGPT OAuth sessions imported from Codex may require an OpenAI API key from platform.openai.com.`
+          mt('x.chatGptOAuthNeedsApiKey', { values: { message: last } })
         )
       }
       throw new Error(last)
@@ -342,7 +342,7 @@ async function chatgptComplete(
     const text = data.choices?.[0]?.message?.content?.trim()
     if (text) return cleanMessage(text)
   }
-  throw new Error(last || 'ChatGPT could not generate a commit message.')
+  throw new Error(last || mt('ChatGPT could not generate a commit message.'))
 }
 
 async function claudeComplete(
@@ -353,7 +353,7 @@ async function claudeComplete(
   model = 'claude-sonnet-4-5'
 ): Promise<string> {
   const token = creds.apiKey || creds.accessToken
-  if (!token) throw new Error('Claude is not connected.')
+  if (!token) throw new Error(mt('Claude is not connected.'))
   const models = [model]
   const oauth = !creds.apiKey && !!creds.accessToken
   let last = ''
@@ -378,7 +378,7 @@ async function claudeComplete(
         messages: [{ role: 'user', content: user }]
       })
     })
-    if (res.status === 404) throw new Error(`Claude model "${model}" is not available. Pick another model.`)
+    if (res.status === 404) throw new Error(mt('x.modelNotAvailable', { values: { label: 'Claude', model } }))
     const data = (await res.json()) as {
       error?: { message?: string }
       content?: { type: string; text?: string }[]
@@ -391,7 +391,7 @@ async function claudeComplete(
     const text = data.content?.find((c) => c.type === 'text')?.text?.trim()
     if (text) return cleanMessage(text)
   }
-  throw new Error(last || 'Claude could not generate a commit message.')
+  throw new Error(last || mt('Claude could not generate a commit message.'))
 }
 
 function cleanMessage(text: string): string {

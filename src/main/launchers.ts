@@ -11,6 +11,7 @@ import {
 } from '../shared/launchers'
 import { getSettings } from './store'
 import { runCommand } from './command'
+import { mt } from './i18n'
 
 const whichCache = new Map<string, Promise<boolean>>()
 
@@ -61,24 +62,24 @@ export function resolveDefaultId(launchers?: LauncherInfo[]): string {
 }
 
 export async function openWith(path: string, launcherId?: string): Promise<string> {
-  if (!existsSync(path)) throw new Error('That folder no longer exists.')
+  if (!existsSync(path)) throw new Error(mt('That folder no longer exists.'))
   const { launchers, defaultId } = await listLaunchers()
   const id = launcherId || defaultId
   const launcher = launchers.find((item) => item.id === id) ?? launcherById(id)
-  if (!launcher) throw new Error(`Unknown launcher “${id}”.`)
+  if (!launcher) throw new Error(mt('x.unknownLauncher', { values: { id } }))
   if ('available' in launcher && !launcher.available) {
-    throw new Error(`${launcher.label} is not installed or not on PATH.`)
+    throw new Error(mt('x.launcherNotInstalled', { values: { label: launcher.label } }))
   }
   const command = ('command' in launcher && typeof launcher.command === 'string' ? launcher.command : undefined) || launcher.bins[0]
   return launch(path, launcher, command)
 }
 
 export async function openFileAt(repo: string, file: string, line = 1, launcherId?: string): Promise<string> {
-  if (!existsSync(file)) throw new Error('This file no longer exists in the working tree. Use Show in Explorer to open its folder.')
+  if (!existsSync(file)) throw new Error(mt('This file no longer exists in the working tree. Use Show in Explorer to open its folder.'))
   const { launchers, defaultId } = await listLaunchers()
   const editors = launchers.filter((item) => item.kind === 'ide' && item.available)
   const editor = launcherId ? editors.find((item) => item.id === launcherId) : editors.find((item) => item.id === defaultId) ?? editors[0]
-  if (!editor?.command) throw new Error('No supported editor is installed. Configure an editor in Settings → Open with.')
+  if (!editor?.command) throw new Error(mt('No supported editor is installed. Configure an editor in Settings → Open with.'))
   const target = `${file}:${Math.max(1, Math.floor(line))}:1`
   const args = editor.id === 'zed' ? [target] : ['--goto', target]
   const targetCommand = await editorExecutable(editor.command)
@@ -92,10 +93,10 @@ async function editorExecutable(command: string): Promise<{ bin: string; cli?: s
   const shim = readFileSync(file, 'utf8')
   const relative = shim.match(/"%~dp0([^"\r\n]+\.exe)"/i)?.[1]
   const bin = relative && resolve(dirname(file), relative)
-  if (!bin || !existsSync(bin)) throw new Error('The editor launcher could not be resolved. Reinstall its command-line launcher.')
+  if (!bin || !existsSync(bin)) throw new Error(mt('The editor launcher could not be resolved. Reinstall its command-line launcher.'))
   const cliPath = shim.match(/"%~dp0([^"\r\n]+cli\.js)"/i)?.[1]
   const cli = cliPath && resolve(dirname(file), cliPath)
-  if (cli && !existsSync(cli)) throw new Error('The editor command-line script is missing. Reinstall its launcher.')
+  if (cli && !existsSync(cli)) throw new Error(mt('The editor command-line script is missing. Reinstall its launcher.'))
   return { bin, cli }
 }
 
@@ -116,7 +117,7 @@ async function launch(path: string, spec: LauncherSpec, command?: string): Promi
     return ps
   }
   if (spec.mode === 'ide') {
-    if (!command) throw new Error(`${spec.label} is not installed or not on PATH.`)
+    if (!command) throw new Error(mt('x.launcherNotInstalled', { values: { label: spec.label } }))
     // Never hand the folder to cmd.exe unquoted: "R&D" would open "R" and run "D" as a command.
     const target = await editorExecutable(command).catch(() => null)
     if (target) {
@@ -130,7 +131,7 @@ async function launch(path: string, spec: LauncherSpec, command?: string): Promi
     return spec.label
   }
   // CLI / agent: open an interactive terminal session in the repo folder.
-  if (!command) throw new Error(`${spec.label} is not installed or not on PATH.`)
+  if (!command) throw new Error(mt('x.launcherNotInstalled', { values: { label: spec.label } }))
   const args = spec.args ?? []
   const line = [command, ...args].map(quoteArg).join(' ')
   // The folder is passed as the working directory, never inside a command line that a shell

@@ -1,6 +1,7 @@
 import { execFile, spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
+import { mt } from './i18n'
 
 async function executable(command: string): Promise<string> {
   if (isAbsolute(command) && existsSync(command) && /\.(exe|ps1)$/i.test(command)) return command
@@ -10,7 +11,7 @@ async function executable(command: string): Promise<string> {
   // npm's PowerShell shim passes an argument array to Node without a cmd shell.
   const script = first.replace(/\.(cmd|bat)$/i, '.ps1')
   if (script !== first && existsSync(script)) return script
-  throw new Error('This command needs an executable or PowerShell entry point on PATH.')
+  throw new Error(mt('This command needs an executable or PowerShell entry point on PATH.'))
 }
 
 /** Encode data separately from PowerShell source: paths and prompts are never shell code. */
@@ -35,7 +36,7 @@ export async function runCommand(command: string, args: string[], options: {
 }): Promise<string> {
   const bin = await executable(command)
   return new Promise((resolve, reject) => {
-    if (options.signal?.aborted) return reject(new Error('Generation canceled.'))
+    if (options.signal?.aborted) return reject(new Error(mt('Generation canceled.')))
     const script = /\.ps1$/i.test(bin)
     const child = spawn(script ? 'powershell.exe' : bin, script ? ['-NoProfile', '-NonInteractive', '-EncodedCommand', encodedCommand(bin, args, options.input)] : args, {
       cwd: options.cwd, env: { ...process.env, ...options.env }, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe']
@@ -58,17 +59,17 @@ export async function runCommand(command: string, args: string[], options: {
       if (child.pid) execFile('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }, () => finish(new Error(message)))
       else finish(new Error(message))
     }
-    const cancel = () => stop('Generation canceled.')
-    const timer = setTimeout(() => stop('The CLI timed out. Check its login in a terminal and try again.'), options.timeout ?? 180_000)
+    const cancel = () => stop(mt('Generation canceled.'))
+    const timer = setTimeout(() => stop(mt('The CLI timed out. Check its login in a terminal and try again.')), options.timeout ?? 180_000)
     options.signal?.addEventListener('abort', cancel, { once: true })
     child.stdout.setEncoding('utf8')
     child.stderr.setEncoding('utf8')
     child.stdout.on('data', (chunk: string) => {
       output += chunk
-      if (output.length > 2_000_000) stop('The CLI returned too much output. Try a shorter description.')
+      if (output.length > 2_000_000) stop(mt('The CLI returned too much output. Try a shorter description.'))
     })
     child.stderr.on('data', (chunk: string) => { error = (error + chunk).slice(-8192) })
     child.once('error', (reason) => finish(reason))
-    child.once('close', (code) => { if (!stopping) finish(code === 0 ? undefined : new Error(error.trim().slice(-1600) || 'The CLI failed. Check its login in a terminal and try again.')) })
+    child.once('close', (code) => { if (!stopping) finish(code === 0 ? undefined : new Error(error.trim().slice(-1600) || mt('The CLI failed. Check its login in a terminal and try again.'))) })
   })
 }

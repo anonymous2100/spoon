@@ -3,6 +3,7 @@ import { AI_MODELS, defaultModelFor } from '../shared/models'
 import type { AiEndpointConfig, AiModelCatalog, AiModelChoice, AiProviderId } from '../shared/types'
 import { resolveCreds } from './oauth'
 import { getSettings, type StoredAiCreds } from './store'
+import { mt } from './i18n'
 
 const TTL_MS = 2 * 60 * 1000
 const cache = new Map<AiProviderId, { at: number; catalog: AiModelCatalog }>()
@@ -45,10 +46,10 @@ function endpointFor(provider: AiProviderId): AiEndpointConfig | null {
 
 async function compatModels(provider: AiProviderId): Promise<AiModelChoice[]> {
   const endpoint = endpointFor(provider)
-  if (!endpoint) throw new Error('Unknown AI provider.')
+  if (!endpoint) throw new Error(mt('Unknown AI provider.'))
   const creds = await resolveCreds(provider).catch(() => null)
   const key = creds?.apiKey || creds?.accessToken
-  if (endpoint.needsKey && !key) throw new Error(`${endpoint.label} is not connected.`)
+  if (endpoint.needsKey && !key) throw new Error(mt('x.providerNotConnected', { values: { label: endpoint.label } }))
   const headers: Record<string, string> = {
     accept: 'application/json',
     ...(endpoint.extraHeaders ?? {})
@@ -72,7 +73,7 @@ function catalogOf(
 
 async function grokModels(creds: StoredAiCreds): Promise<AiModelChoice[]> {
   const key = creds.apiKey || creds.accessToken
-  if (!key) throw new Error('Grok is not connected.')
+  if (!key) throw new Error(mt('Grok is not connected.'))
   const data = await getJson('https://api.x.ai/v1/models', {
     Authorization: `Bearer ${key}`
   })
@@ -81,7 +82,7 @@ async function grokModels(creds: StoredAiCreds): Promise<AiModelChoice[]> {
 
 async function openAiModels(creds: StoredAiCreds): Promise<AiModelChoice[]> {
   const key = creds.apiKey || creds.accessToken
-  if (!key) throw new Error('ChatGPT is not connected.')
+  if (!key) throw new Error(mt('ChatGPT is not connected.'))
   const data = await getJson('https://api.openai.com/v1/models', {
     Authorization: `Bearer ${key}`
   })
@@ -94,7 +95,7 @@ async function openAiModels(creds: StoredAiCreds): Promise<AiModelChoice[]> {
 
 async function claudeModels(creds: StoredAiCreds): Promise<AiModelChoice[]> {
   const token = creds.apiKey || creds.accessToken
-  if (!token) throw new Error('Claude is not connected.')
+  if (!token) throw new Error(mt('Claude is not connected.'))
   const oauth = !creds.apiKey && !!creds.accessToken
   const headers: Record<string, string> = { 'anthropic-version': '2023-06-01' }
   if (oauth) {

@@ -1,3 +1,4 @@
+import type { TranslateFn } from './i18n'
 import type { AccentId, IconStyle, ThemeMode, ThemePack } from './types'
 
 export type AccentDef = {
@@ -64,6 +65,27 @@ export const ACCENTS: AccentDef[] = [
   { id: 'silver', label: 'Silver', light: '#52525b', dark: '#d4d4d8', swatch: '#a1a1aa' },
   { id: 'custom', label: 'Custom', light: '#0b57d0', dark: '#6cb6ff', swatch: '#ffffff' }
 ]
+
+/**
+ * Translate a theme pack label. "Spoon" and "SpaceX" are brand names, so they stay as they are;
+ * "Classic" and "Colored" are plain words and are translated through the catalog.
+ */
+export function themePackLabel(id: ThemePack, t: TranslateFn): string {
+  const pack = THEME_PACKS.find((item) => item.id === id)
+  return pack ? t(pack.label) : ''
+}
+
+/** Translate the description of a theme pack. */
+export function themePackBlurb(id: ThemePack, t: TranslateFn): string {
+  const pack = THEME_PACKS.find((item) => item.id === id)
+  return pack ? t(pack.blurb) : ''
+}
+
+/** Translate an accent colour name. */
+export function accentLabel(id: AccentId, t: TranslateFn): string {
+  const accent = ACCENTS.find((item) => item.id === id)
+  return accent ? t(accent.label) : ''
+}
 
 /** Per-action icon colors when iconStyle is `color`. */
 export const ICON_COLORS: Record<string, string> = {

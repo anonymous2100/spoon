@@ -1,3 +1,5 @@
+import type { TranslateFn } from './i18n'
+
 export function dayKey(date: Date): string {
   return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`
 }
@@ -33,6 +35,18 @@ export interface ScaleWindow {
   days: number
 }
 
+/** Translate the tab label of a contribution scale. */
+export function contributionScaleLabel(scale: ContributionScale, t: TranslateFn): string {
+  const item = CONTRIBUTION_SCALES.find((entry) => entry.id === scale)
+  return item ? t(item.label) : ''
+}
+
+/** Translate the range description of a contribution scale ("the last 30 days"). */
+export function contributionScaleRange(scale: ContributionScale, t: TranslateFn): string {
+  const item = CONTRIBUTION_SCALES.find((entry) => entry.id === scale)
+  return item ? t(item.range) : ''
+}
+
 /** Inclusive window for a contribution scale. Day stays the short recent view. */
 export function scaleWindow(scale: ContributionScale, now = new Date()): ScaleWindow {
   const end = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -58,15 +72,22 @@ export interface ContributionBucket {
   to: Date
 }
 
-export function contributionBuckets(scale: ContributionScale, now = new Date()): ContributionBucket[] {
+/**
+ * Buckets for a contribution scale.
+ *
+ * `locale` selects the calendar/date formatting used for the bucket labels and titles. The week
+ * title is a template (`the week of {date}`) so a language pack can translate the wording while
+ * the date itself stays locale-formatted.
+ */
+export function contributionBuckets(scale: ContributionScale, now = new Date(), locale?: string): ContributionBucket[] {
   const { start, end } = scaleWindow(scale, now)
-  if (scale === 'week') return weekBuckets(start, end)
-  if (scale === 'month') return monthBuckets(start, end)
+  if (scale === 'week') return weekBuckets(start, end, locale)
+  if (scale === 'month') return monthBuckets(start, end, locale)
   if (scale === 'year') return yearBuckets(start, end)
   return []
 }
 
-function weekBuckets(start: Date, end: Date): ContributionBucket[] {
+function weekBuckets(start: Date, end: Date, locale?: string): ContributionBucket[] {
   const cursor = new Date(start)
   cursor.setDate(cursor.getDate() - cursor.getDay())
   const buckets: ContributionBucket[] = []
@@ -77,8 +98,8 @@ function weekBuckets(start: Date, end: Date): ContributionBucket[] {
     const to = new Date(Math.min(weekEnd.getTime(), end.getTime()))
     buckets.push({
       key: dayKey(from),
-      label: from.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-      title: `the week of ${from.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}`,
+      label: from.toLocaleDateString(locale, { month: 'short', day: 'numeric' }),
+      title: `the week of ${from.toLocaleDateString(locale, { month: 'long', day: 'numeric' })}`,
       from,
       to
     })
@@ -87,7 +108,7 @@ function weekBuckets(start: Date, end: Date): ContributionBucket[] {
   return buckets
 }
 
-function monthBuckets(start: Date, end: Date): ContributionBucket[] {
+function monthBuckets(start: Date, end: Date, locale?: string): ContributionBucket[] {
   const cursor = new Date(start.getFullYear(), start.getMonth(), 1)
   const buckets: ContributionBucket[] = []
   while (cursor <= end && buckets.length < 18) {
@@ -96,8 +117,8 @@ function monthBuckets(start: Date, end: Date): ContributionBucket[] {
     const to = new Date(Math.min(monthEnd.getTime(), end.getTime()))
     buckets.push({
       key: `${cursor.getFullYear()}-${cursor.getMonth() + 1}`,
-      label: cursor.toLocaleDateString(undefined, { month: 'short' }),
-      title: cursor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }),
+      label: cursor.toLocaleDateString(locale, { month: 'short' }),
+      title: cursor.toLocaleDateString(locale, { month: 'long', year: 'numeric' }),
       from,
       to
     })
@@ -136,14 +157,14 @@ export function contributionWeeks(now = new Date(), spanDays = RECENT_DAYS): Dat
   return weeks
 }
 
-export function monthMarks(weeks: Date[][]): (string | null)[] {
+export function monthMarks(weeks: Date[][], locale?: string): (string | null)[] {
   const marks: (string | null)[] = weeks.map(() => null)
   let previous = -99
   weeks.forEach((week, index) => {
     const first = week.find((day) => day.getDate() === 1) ?? (index === 0 ? week[0] : undefined)
     if (!first || index - previous < 2) return
     previous = index
-    marks[index] = first.toLocaleDateString(undefined, { month: 'short' })
+    marks[index] = first.toLocaleDateString(locale, { month: 'short' })
   })
   return marks
 }

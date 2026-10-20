@@ -121,6 +121,7 @@ const api = {
     settings: () => ipcRenderer.invoke('app:settings'),
     patchSettings: (patch: object) => ipcRenderer.invoke('app:patchSettings', patch),
     recent: () => ipcRenderer.invoke('app:recent'),
+    locale: () => ipcRenderer.invoke('app:locale'),
     session: () => ipcRenderer.invoke('app:session'),
     saveSession: (session: object) => ipcRenderer.invoke('app:saveSession', session),
     workspaces: () => ipcRenderer.invoke('app:workspaces'),

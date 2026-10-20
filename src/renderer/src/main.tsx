@@ -1,5 +1,6 @@
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
+import { I18nProvider } from './i18n'
 import './styles.css'
 import './refresh.css'
 import './file-actions.css'
@@ -12,5 +13,9 @@ if (!window.spoon) {
   root.innerHTML =
     '<div style="font:14px Segoe UI;padding:32px">Spoon could not connect to the desktop process. Close this window and run <code>npm run dev</code>.</div>'
 } else {
-  createRoot(root).render(<App />)
+  createRoot(root).render(
+    <I18nProvider>
+      <App />
+    </I18nProvider>
+  )
 }

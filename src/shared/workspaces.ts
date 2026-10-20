@@ -1,4 +1,13 @@
 import type { RepoWorkspace, WorkspaceAnalysis, WorkspaceSuggestion } from './types'
+import type { TranslateFn } from './i18n'
+
+/**
+ * Translator used when the caller does not supply one.
+ *
+ * The shared helpers run in both the main and the renderer, so they take the translator as an
+ * argument instead of importing one. Without a translator they fall back to the English text.
+ */
+const identity: TranslateFn = (key) => key
 
 export const WORKSPACE_COLORS = [
   '#4c8dff',
@@ -96,12 +105,13 @@ export function sanitizeWorkspaces(raw: unknown): RepoWorkspace[] {
 
 export function parseWorkspaceAnalysis(
   text: string,
-  knownRepos: { path: string; name: string }[]
+  knownRepos: { path: string; name: string }[],
+  translate: TranslateFn = identity
 ): WorkspaceAnalysis {
   const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/```$/i, '').trim()
   const start = cleaned.indexOf('{')
   const end = cleaned.lastIndexOf('}')
-  if (start < 0 || end <= start) throw new Error('The workspace analysis was not JSON.')
+  if (start < 0 || end <= start) throw new Error(translate('The workspace analysis was not JSON.'))
   const data = JSON.parse(cleaned.slice(start, end + 1)) as {
     summary?: string
     workspaces?: { name?: string; repos?: unknown; rationale?: string }[]
@@ -132,15 +142,18 @@ export function parseWorkspaceAnalysis(
       rationale: (item.rationale ?? '').trim()
     })
   }
-  if (!workspaces.length) throw new Error('The analysis did not name any workspaces.')
+  if (!workspaces.length) throw new Error(translate('The analysis did not name any workspaces.'))
   return {
-    summary: (data.summary ?? '').trim() || `${workspaces.length} suggested workspace${workspaces.length === 1 ? '' : 's'}.`,
+    summary: (data.summary ?? '').trim() || translate('x.suggestedWorkspaces', { count: workspaces.length }),
     workspaces
   }
 }
 
-export function fallbackWorkspaceAnalysis(repos: { path: string; name: string }[]): WorkspaceAnalysis {
-  if (!repos.length) throw new Error('Add repositories before analyzing workspaces.')
+export function fallbackWorkspaceAnalysis(
+  repos: { path: string; name: string }[],
+  translate: TranslateFn = identity
+): WorkspaceAnalysis {
+  if (!repos.length) throw new Error(translate('Add repositories before analyzing workspaces.'))
   const groups = new Map<string, string[]>()
   for (const repo of repos) {
     const key = parentDir(repo.path).toLowerCase()
@@ -155,8 +168,8 @@ export function fallbackWorkspaceAnalysis(repos: { path: string; name: string }[
       name: multi ? label : repos.find((repo) => repo.path === paths[0])?.name || label,
       repos: paths,
       rationale: multi
-        ? `Repositories under the same folder (${label}).`
-        : 'Single repository; kept as its own workspace.'
+        ? translate('x.reposUnderFolder', { values: { label } })
+        : translate('Single repository; kept as its own workspace.')
     }
   })
   // Prefer multi-repo groups first, then singles
@@ -165,7 +178,7 @@ export function fallbackWorkspaceAnalysis(repos: { path: string; name: string }[
   const clustered = workspaces.filter((item) => item.repos.length > 1)
   const chosen = clustered.length ? clustered : workspaces
   return {
-    summary: `${repos.length} repositor${repos.length === 1 ? 'y' : 'ies'} grouped into ${chosen.length} workspace${chosen.length === 1 ? '' : 's'} by folder.`,
+    summary: translate('x.reposGroupedByFolder', { values: { repos: repos.length, workspaces: chosen.length } }),
     workspaces: chosen
   }
 }

@@ -2,6 +2,7 @@ import { Button } from './Button'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { AboutInfo, UpdateState } from '../../shared/types'
 import { IcoClose, IcoHelp, IcoRefresh } from './icons'
+import { t, useT } from './i18n'
 
 const NOTES: Record<string, string[]> = {
   '1.2.2': [
@@ -79,37 +80,50 @@ function SpoonBanner() {
 function updateAction(state: UpdateState, version: string) {
   switch (state.status) {
     case 'checking':
-      return { label: 'Checking…', detail: 'Looking for a newer Spoon.', kind: 'busy' as const }
+      return { label: t('Checking…'), detail: t('Looking for a newer Spoon.'), kind: 'busy' as const }
     case 'available':
       return {
-        label: 'Downloading…',
-        detail: `Spoon ${state.version} is available.`,
+        label: t('Downloading…'),
+        detail: t('x.updateAvailable', { values: { version: state.version ?? '' } }),
         kind: 'busy' as const
       }
     case 'downloading':
       return {
-        label: `Downloading ${state.percent ?? 0}%`,
-        detail: `Spoon ${state.version} is on its way.`,
+        label: t('x.downloadingLabel', { values: { percent: state.percent ?? 0 } }),
+        detail: t('x.updateOnItsWay', { values: { version: state.version ?? '' } }),
         kind: 'busy' as const
       }
     case 'ready':
       return {
-        label: 'Restart and install',
-        detail: `Spoon ${state.version} is ready.`,
+        label: t('Restart and install'),
+        detail: t('x.updateReady', { values: { version: state.version ?? '' } }),
         kind: 'install' as const
       }
     case 'none':
-      return { label: 'Check for updates', detail: `Spoon ${version || 'this build'} is up to date.`, kind: 'check' as const }
+      return {
+        label: t('Check for updates'),
+        detail: t('x.upToDate', { values: { version: version || t('this build') } }),
+        kind: 'check' as const
+      }
     case 'error':
-      return { label: 'Try again', detail: state.error ?? 'Could not check for updates.', kind: 'check' as const }
+      return {
+        label: t('Try again'),
+        detail: state.error ?? t('Could not check for updates.'),
+        kind: 'check' as const
+      }
     case 'disabled':
-      return { label: 'Check for updates', detail: 'Updates run in the installed app.', kind: 'check' as const }
+      return { label: t('Check for updates'), detail: t('Updates run in the installed app.'), kind: 'check' as const }
     default:
-      return { label: 'Check for updates', detail: 'Get the latest Spoon from GitHub Releases.', kind: 'check' as const }
+      return {
+        label: t('Check for updates'),
+        detail: t('Get the latest Spoon from GitHub Releases.'),
+        kind: 'check' as const
+      }
   }
 }
 
 export function AboutDialog({ onClose, onHelp }: { onClose: () => void; onHelp: () => void }) {
+  const t = useT()
   const panel = useRef<HTMLDivElement>(null)
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
@@ -162,15 +176,17 @@ export function AboutDialog({ onClose, onHelp }: { onClose: () => void; onHelp: 
       >
         <div className="about-hero">
           <SpoonBanner />
-          <Button type="button" className="about-close" aria-label="Close" onClick={onClose}>
+          <Button type="button" className="about-close" aria-label={t('Close')} onClick={onClose}>
             <IcoClose />
           </Button>
         </div>
         <div className="about-body">
           <header className="about-brand">
-            <p className="about-kicker">Git client for Windows</p>
+            <p className="about-kicker">{t('Git client for Windows')}</p>
             <h2 id="about-title">Spoon</h2>
-            <p className="about-ver">{version ? `Version ${version}` : 'Loading version…'}</p>
+            <p className="about-ver">
+              {version ? t('x.versionLabel', { values: { version } }) : t('x.loadingVersion')}
+            </p>
           </header>
           <div className="about-actions">
             <Button
@@ -185,7 +201,7 @@ export function AboutDialog({ onClose, onHelp }: { onClose: () => void; onHelp: 
             </Button>
             <Button type="button" className="ghost ico-text" onClick={onHelp}>
               <IcoHelp />
-              <span>Help</span>
+              <span>{t('Help')}</span>
             </Button>
           </div>
           <p className="about-status" role="status">
@@ -193,36 +209,36 @@ export function AboutDialog({ onClose, onHelp }: { onClose: () => void; onHelp: 
           </p>
           {update.status === 'ready' && nextNotes.length > 0 ? (
             <section className="about-block">
-              <h3>What's new</h3>
+              <h3>{t("What's new")}</h3>
               <ul>
                 {nextNotes.map((line) => (
-                  <li key={line}>{line}</li>
+                  <li key={line}>{t(line)}</li>
                 ))}
               </ul>
             </section>
           ) : currentNotes.length > 0 ? (
             <section className="about-block">
-              <h3>What's new</h3>
+              <h3>{t("What's new")}</h3>
               <ul>
                 {currentNotes.map((line) => (
-                  <li key={line}>{line}</li>
+                  <li key={line}>{t(line)}</li>
                 ))}
               </ul>
             </section>
           ) : null}
           <section className="about-block">
-            <h3>Developer</h3>
+            <h3>{t('Developer')}</h3>
             <dl className="about-meta">
               <div>
-                <dt>Author</dt>
+                <dt>{t('Author')}</dt>
                 <dd>Alan (elgodox)</dd>
               </div>
               <div>
-                <dt>License</dt>
+                <dt>{t('License')}</dt>
                 <dd>MIT · Copyright 2026</dd>
               </div>
               <div>
-                <dt>Source</dt>
+                <dt>{t('Source')}</dt>
                 <dd>
                   <Button
                     type="button"
@@ -235,7 +251,7 @@ export function AboutDialog({ onClose, onHelp }: { onClose: () => void; onHelp: 
               </div>
               {info && (
                 <div>
-                  <dt>Runtime</dt>
+                  <dt>{t('Runtime')}</dt>
                   <dd>
                     Electron {info.electron} · Chromium {info.chrome.split('.').slice(0, 2).join('.')}
                   </dd>

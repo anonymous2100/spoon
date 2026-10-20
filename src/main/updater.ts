@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import electronUpdater from 'electron-updater'
 import type { UpdateState } from '../shared/types'
+import { mt } from './i18n'
 
 const { autoUpdater } = electronUpdater
 
@@ -69,7 +70,7 @@ function isQuietFeedMiss(message: string): boolean {
 export function initUpdater(onChange: (s: UpdateState) => void, enabled: boolean): void {
   notify = onChange
   if (!app.isPackaged) {
-    set({ status: 'disabled', error: 'Updates only run in the installed app.' })
+    set({ status: 'disabled', error: mt('Updates only run in the installed app.') })
     return
   }
   wire()

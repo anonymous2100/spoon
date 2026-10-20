@@ -11,6 +11,8 @@ compression: maximum
 electronLanguages:
   - en-US
   - es
+  - zh-CN
+  - zh-TW
 removePackageScripts: true
 publish:
   provider: github
